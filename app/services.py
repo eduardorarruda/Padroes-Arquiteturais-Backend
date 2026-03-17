@@ -65,6 +65,30 @@ class ContaService:
         return db.query(Conta).filter(Conta.usuario_id == usuario_id).offset(skip).limit(limit).all()
 
     @staticmethod
+    def listar_contas_a_pagar(db: Session, usuario_id: int, skip: int = 0, limit: int = 100):
+        return (
+            db.query(Conta)
+            .filter(Conta.usuario_id == usuario_id, Conta.tipo == "PAGAR")
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
+    @staticmethod
+    def listar_contas_a_receber(db: Session, usuario_id: int, skip: int = 0, limit: int = 100):
+        return (
+            db.query(Conta)
+            .filter(Conta.usuario_id == usuario_id, Conta.tipo == "RECEBER")
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
+    @staticmethod
+    def obter_conta(db: Session, conta_id: int, usuario_id: int):
+        return db.query(Conta).filter(Conta.id == conta_id, Conta.usuario_id == usuario_id).first()
+
+    @staticmethod
     def criar_conta(db: Session, conta: ContaCreate, usuario_id: int):
         conta_data = conta.dict() if hasattr(conta, 'dict') else conta.model_dump()
         db_conta = Conta(**conta_data, usuario_id=usuario_id)
@@ -78,11 +102,11 @@ class ContaService:
         db_conta = db.query(Conta).filter(Conta.id == conta_id, Conta.usuario_id == usuario_id).first()
         if not db_conta:
             return None
-        
+
         update_data = conta_update.dict(exclude_unset=True) if hasattr(conta_update, 'dict') else conta_update.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(db_conta, key, value)
-            
+
         db.commit()
         db.refresh(db_conta)
         return db_conta

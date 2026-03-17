@@ -28,6 +28,7 @@ CREATE TABLE contas (
 	descricao VARCHAR(255) NOT NULL, 
 	valor NUMERIC(10, 2) NOT NULL, 
 	data_vencimento DATE NOT NULL, 
+	tipo VARCHAR(7) NOT NULL CHECK (tipo IN ('PAGAR', 'RECEBER')),
 	status VARCHAR(20) NOT NULL, 
 	usuario_id INTEGER NOT NULL, 
 	categoria_id INTEGER, 

@@ -1,10 +1,15 @@
 from pydantic import BaseModel, Field, EmailStr
 from datetime import date
 from typing import Optional
+from enum import Enum
 
 # ==========================================
 # DTOs (Data Transfer Objects): Schemas Pydantic
 # ==========================================
+
+class TipoContaEnum(str, Enum):
+    PAGAR = "PAGAR"
+    RECEBER = "RECEBER"
 
 class UsuarioCreate(BaseModel):
     nome: str
@@ -57,9 +62,10 @@ class ParceiroResponse(ParceiroBase):
         from_attributes = True
 
 class ContaBase(BaseModel):
-    descricao: str = Field(..., description="Descrição da conta a pagar")
+    descricao: str = Field(..., description="Descrição da conta")
     valor: float = Field(..., gt=0, description="Valor monetário da conta")
     data_vencimento: date
+    tipo: TipoContaEnum = Field(..., description="Tipo da conta: PAGAR ou RECEBER")
     status: str = Field(default="Pendente")
     categoria_id: Optional[int] = None
     parceiro_id: Optional[int] = None
@@ -71,6 +77,7 @@ class ContaUpdate(BaseModel):
     descricao: Optional[str] = None
     valor: Optional[float] = None
     data_vencimento: Optional[date] = None
+    tipo: Optional[TipoContaEnum] = None
     status: Optional[str] = None
     categoria_id: Optional[int] = None
     parceiro_id: Optional[int] = None

@@ -1,10 +1,15 @@
-from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey
+import enum
+from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from .database import Base
 
 # ==========================================
 # CAMADA DE DADOS: Modelos ORM (SQLAlchemy)
 # ==========================================
+
+class TipoConta(str, enum.Enum):
+    PAGAR = "PAGAR"
+    RECEBER = "RECEBER"
 
 class Usuario(Base):
     __tablename__ = "usuarios"
@@ -46,6 +51,7 @@ class Conta(Base):
     descricao = Column(String(255), nullable=False)
     valor = Column(Numeric(10, 2), nullable=False)
     data_vencimento = Column(Date, nullable=False)
+    tipo = Column(Enum(TipoConta), nullable=False)
     status = Column(String(20), nullable=False, default="Pendente")
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     categoria_id = Column(Integer, ForeignKey("categorias.id"), nullable=True)
