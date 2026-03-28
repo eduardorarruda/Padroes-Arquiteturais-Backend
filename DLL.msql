@@ -1,60 +1,60 @@
 CREATE TABLE usuarios (
-	id SERIAL NOT NULL, 
+	id INT AUTO_INCREMENT NOT NULL, 
 	nome VARCHAR(100) NOT NULL, 
-	email VARCHAR(100) NOT NULL, 
+	email VARCHAR(100) NOT NULL UNIQUE, 
 	senha_hash VARCHAR(255) NOT NULL, 
 	PRIMARY KEY (id)
 );
 
 CREATE TABLE categorias (
-	id SERIAL NOT NULL, 
+	id INT AUTO_INCREMENT NOT NULL, 
 	descricao VARCHAR(255) NOT NULL, 
-	usuario_id INTEGER NOT NULL, 
+	usuario_id INT NOT NULL, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(usuario_id) REFERENCES usuarios (id)
 );
 
 CREATE TABLE parceiros (
-	id SERIAL NOT NULL, 
+	id INT AUTO_INCREMENT NOT NULL, 
 	nome VARCHAR(255) NOT NULL, 
 	tipo VARCHAR(50) NOT NULL, 
-	usuario_id INTEGER NOT NULL, 
+	usuario_id INT NOT NULL, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(usuario_id) REFERENCES usuarios (id)
 );
 
 CREATE TABLE contas_correntes (
-	id SERIAL NOT NULL, 
+	id INT AUTO_INCREMENT NOT NULL, 
 	descricao VARCHAR(255) NOT NULL, 
 	saldo NUMERIC(10, 2) NOT NULL DEFAULT 0, 
-	usuario_id INTEGER NOT NULL, 
+	usuario_id INT NOT NULL, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(usuario_id) REFERENCES usuarios (id)
 );
 
 CREATE TABLE cartoes_credito (
-	id SERIAL NOT NULL,
+	id INT AUTO_INCREMENT NOT NULL,
 	nome VARCHAR(100) NOT NULL,
 	limite NUMERIC(10, 2) NOT NULL,
-	dia_fechamento INTEGER NOT NULL,
-	dia_vencimento INTEGER NOT NULL,
-	usuario_id INTEGER NOT NULL,
-	conta_corrente_id INTEGER NOT NULL,
+	dia_fechamento INT NOT NULL CHECK (dia_fechamento BETWEEN 1 AND 31),
+	dia_vencimento INT NOT NULL CHECK (dia_vencimento BETWEEN 1 AND 31),
+	usuario_id INT NOT NULL,
+	conta_corrente_id INT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY(usuario_id) REFERENCES usuarios (id),
 	FOREIGN KEY(conta_corrente_id) REFERENCES contas_correntes (id)
 );
 
 CREATE TABLE lancamentos_cartao (
-	id SERIAL NOT NULL,
+	id INT AUTO_INCREMENT NOT NULL,
 	descricao VARCHAR(255) NOT NULL,
 	valor NUMERIC(10, 2) NOT NULL,
 	data_compra DATE NOT NULL,
-	mes_fatura INTEGER NOT NULL,
-	ano_fatura INTEGER NOT NULL,
-	cartao_id INTEGER NOT NULL,
-	categoria_id INTEGER,
-	usuario_id INTEGER NOT NULL,
+	mes_fatura INT NOT NULL CHECK (mes_fatura BETWEEN 1 AND 12),
+	ano_fatura INT NOT NULL,
+	cartao_id INT NOT NULL,
+	categoria_id INT,
+	usuario_id INT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY(cartao_id) REFERENCES cartoes_credito (id),
 	FOREIGN KEY(categoria_id) REFERENCES categorias (id),
@@ -62,16 +62,16 @@ CREATE TABLE lancamentos_cartao (
 );
 
 CREATE TABLE contas (
-	id SERIAL NOT NULL, 
+	id INT AUTO_INCREMENT NOT NULL, 
 	descricao VARCHAR(255) NOT NULL, 
 	valor NUMERIC(10, 2) NOT NULL, 
 	data_vencimento DATE NOT NULL, 
 	tipo VARCHAR(7) NOT NULL CHECK (tipo IN ('PAGAR', 'RECEBER')),
-	status VARCHAR(20) NOT NULL, 
-	usuario_id INTEGER NOT NULL, 
-	categoria_id INTEGER, 
-	parceiro_id INTEGER, 
-	conta_corrente_id INTEGER, 
+	status VARCHAR(20) NOT NULL CHECK (status IN ('PENDENTE', 'PAGO', 'ATRASADO', 'CANCELADO')),
+	usuario_id INT NOT NULL, 
+	categoria_id INT, 
+	parceiro_id INT, 
+	conta_corrente_id INT, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(usuario_id) REFERENCES usuarios (id), 
 	FOREIGN KEY(categoria_id) REFERENCES categorias (id), 
