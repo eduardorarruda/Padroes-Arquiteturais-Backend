@@ -6,10 +6,38 @@ from .routers import contas, auth, categorias, parceiros, contas_correntes, cart
 # Cria as tabelas no banco de dados (se não existirem)
 Base.metadata.create_all(bind=engine)
 
+tags_metadata = [
+    {
+        "name": "Autenticação",
+        "description": "Operações de login e registro de usuários.",
+    },
+    {
+        "name": "Cartões de Crédito",
+        "description": "Gerenciamento de cartões de crédito, lançamentos e fechamento de faturas.",
+    },
+    {
+        "name": "Contas",
+        "description": "Gerenciamento de contas a pagar e receber, incluindo a rotina de baixa.",
+    },
+    {
+        "name": "Contas Correntes",
+        "description": "Gerenciamento das contas correntes utilizadas para o controle de saldos.",
+    },
+    {
+        "name": "Categorias",
+        "description": "Classificação e organização das transações.",
+    },
+    {
+        "name": "Parceiros",
+        "description": "Gerenciamento de clientes e fornecedores associados às contas.",
+    },
+]
+
 app = FastAPI(
     title="API de Controle Financeiro",
-    description="API para gerenciamento de contas a pagar e receber",
-    version="1.0.0"
+    description="API para gerenciamento completo de finanças pessoais (contas, cartões, saldos).",
+    version="1.0.0",
+    openapi_tags=tags_metadata
 )
 
 # BUG 4 FIX — CORS configurado ANTES dos routers

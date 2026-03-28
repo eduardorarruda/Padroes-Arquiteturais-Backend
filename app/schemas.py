@@ -16,6 +16,18 @@ class UsuarioCreate(BaseModel):
     email: EmailStr
     senha: str = Field(..., min_length=6)
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "nome": "João da Silva",
+                    "email": "joao@email.com",
+                    "senha": "senha_segura123"
+                }
+            ]
+        }
+    }
+
 class UsuarioResponse(BaseModel):
     id: int
     nome: str
@@ -69,6 +81,17 @@ class ContaCorrenteCreate(BaseModel):
     descricao: str = Field(..., description="Descrição da conta corrente")
     saldo: float = Field(default=0, description="Saldo inicial da conta corrente")
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "descricao": "Conta Itaú principal",
+                    "saldo": 1500.50
+                }
+            ]
+        }
+    }
+
 class ContaCorrenteUpdate(BaseModel):
     descricao: Optional[str] = None
     saldo: Optional[float] = None
@@ -93,6 +116,20 @@ class CartaoCreditoCreate(BaseModel):
     dia_fechamento: int = Field(..., ge=1, le=31, description="Dia do fechamento da fatura")
     dia_vencimento: int = Field(..., ge=1, le=31, description="Dia do vencimento da fatura")
     conta_corrente_id: int = Field(..., description="Conta corrente padrão para pagamento da fatura")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "nome": "Nubank Roxinho",
+                    "limite": 5000.00,
+                    "dia_fechamento": 25,
+                    "dia_vencimento": 5,
+                    "conta_corrente_id": 1
+                }
+            ]
+        }
+    }
 
 class CartaoCreditoResponse(BaseModel):
     id: int
@@ -119,6 +156,21 @@ class LancamentoCartaoCreate(BaseModel):
     ano_fatura: int = Field(..., ge=2000, description="Ano da fatura")
     categoria_id: Optional[int] = None
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "descricao": "Compra no Mercado Livre",
+                    "valor": 120.50,
+                    "data_compra": "2023-11-15",
+                    "mes_fatura": 12,
+                    "ano_fatura": 2023,
+                    "categoria_id": 1
+                }
+            ]
+        }
+    }
+
 class LancamentoCartaoResponse(BaseModel):
     id: int
     descricao: str
@@ -142,6 +194,17 @@ class FechamentoFaturaRequest(BaseModel):
     mes: int = Field(..., ge=1, le=12, description="Mês da fatura a fechar")
     ano: int = Field(..., ge=2000, description="Ano da fatura a fechar")
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "mes": 12,
+                    "ano": 2023
+                }
+            ]
+        }
+    }
+
 # ==========================================
 # SCHEMAS DE CONTA (PAGAR / RECEBER)
 # ==========================================
@@ -156,7 +219,21 @@ class ContaBase(BaseModel):
     parceiro_id: Optional[int] = None
 
 class ContaCreate(ContaBase):
-    pass
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "descricao": "Conta de Luz",
+                    "valor": 180.00,
+                    "data_vencimento": "2023-12-10",
+                    "tipo": "PAGAR",
+                    "status": "Pendente",
+                    "categoria_id": 2,
+                    "parceiro_id": 1
+                }
+            ]
+        }
+    }
 
 class ContaUpdate(BaseModel):
     descricao: Optional[str] = None

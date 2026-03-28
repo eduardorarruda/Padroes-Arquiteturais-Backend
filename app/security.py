@@ -14,7 +14,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 dias
 
 # Configuração do OAuth2
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 def verificar_senha(senha_plana: str, senha_hash: str) -> bool:
     # O bcrypt exige que as senhas sejam convertidas para bytes antes da verificação
