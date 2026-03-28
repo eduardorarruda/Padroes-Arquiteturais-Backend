@@ -85,7 +85,7 @@ class LancamentoCartao(Base):
     mes_fatura = Column(Integer, nullable=False)
     ano_fatura = Column(Integer, nullable=False)
     cartao_id = Column(Integer, ForeignKey("cartoes_credito.id"), nullable=False)
-    categoria_id = Column(Integer, ForeignKey("categorias.id"), nullable=True)
+    categoria_id = Column(Integer, ForeignKey("categorias.id"), nullable=False)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
 
     cartao = relationship("CartaoCredito", back_populates="lancamentos")
@@ -99,10 +99,11 @@ class Conta(Base):
     descricao = Column(String(255), nullable=False)
     valor = Column(Numeric(10, 2), nullable=False)
     data_vencimento = Column(Date, nullable=False)
+    data_pagamento = Column(Date, nullable=True)
     tipo = Column(Enum(TipoConta), nullable=False)
     status = Column(String(20), nullable=False, default="Pendente")
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
-    categoria_id = Column(Integer, ForeignKey("categorias.id"), nullable=True)
+    categoria_id = Column(Integer, ForeignKey("categorias.id"), nullable=False)
     parceiro_id = Column(Integer, ForeignKey("parceiros.id"), nullable=True)
     conta_corrente_id = Column(Integer, ForeignKey("contas_correntes.id"), nullable=True)
 

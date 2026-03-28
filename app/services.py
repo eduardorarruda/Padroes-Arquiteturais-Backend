@@ -6,7 +6,7 @@ from .models import Conta, Usuario, Categoria, Parceiro, ContaCorrente, CartaoCr
 from .schemas import (
     ContaCreate, ContaUpdate, UsuarioCreate, CategoriaCreate, ParceiroCreate,
     ContaCorrenteCreate, ContaCorrenteUpdate, ContaBaixa,
-    CartaoCreditoCreate, LancamentoCartaoCreate, FechamentoFaturaRequest
+    CartaoCreditoCreate, CartaoCreditoUpdate, LancamentoCartaoCreate, FechamentoFaturaRequest
 )
 from .security import obter_hash_senha
 
@@ -168,6 +168,32 @@ class ContaService:
     @staticmethod
     def criar_conta(db: Session, conta: ContaCreate, usuario_id: int):
         conta_data = conta.dict() if hasattr(conta, 'dict') else conta.model_dump()
+        
+        # Validação para conta que já nasce paga/recebida
+        status_atual = str(conta_data.get("status", "")).upper()
+        if status_atual in ["PAGO", "RECEBIDO"]:
+            if not conta_data.get("conta_corrente_id"):
+                raise HTTPException(
+                    status_code=400, 
+                    detail="É obrigatório informar a 'conta_corrente_id' quando a conta for criada com status PAGO ou RECEBIDO."
+                )
+            if not conta_data.get("data_pagamento"):
+                raise HTTPException(
+                    status_code=400, 
+                    detail="É obrigatório informar a 'data_pagamento' quando a conta for criada com status PAGO ou RECEBIDO."
+                )
+                
+            # Validar se a conta corrente existe e pertence ao usuário
+            db_cc = db.query(ContaCorrente).filter(
+                ContaCorrente.id == conta_data["conta_corrente_id"],
+                ContaCorrente.usuario_id == usuario_id
+            ).first()
+            if not db_cc:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Conta corrente informada não encontrada ou não pertence ao usuário."
+                )
+
         db_conta = Conta(**conta_data, usuario_id=usuario_id)
         db.add(db_conta)
         db.commit()
@@ -181,6 +207,12 @@ class ContaService:
             return None
 
         update_data = conta_update.dict(exclude_unset=True) if hasattr(conta_update, 'dict') else conta_update.model_dump(exclude_unset=True)
+        
+        # Desvinculação da conta corrente e data de pagamento se o status voltar para PENDENTE
+        if "status" in update_data and update_data["status"].upper() == "PENDENTE":
+            db_conta.conta_corrente_id = None
+            db_conta.data_pagamento = None
+            
         for key, value in update_data.items():
             setattr(db_conta, key, value)
 
@@ -220,8 +252,9 @@ class ContaService:
         else:
             db_conta.status = "Recebido"
 
-        # Vincular a conta corrente
+        # Vincular a conta corrente e registrar data_pagamento
         db_conta.conta_corrente_id = baixa.conta_corrente_id
+        db_conta.data_pagamento = baixa.data_pagamento if baixa.data_pagamento else date.today()
 
         db.commit()
         db.refresh(db_conta)
@@ -241,15 +274,50 @@ class ContaService:
 # ==========================================
 class CartaoCreditoService:
     @staticmethod
+    def _calcular_limites(db: Session, cartao: CartaoCredito, usuario_id: int):
+        from sqlalchemy import func
+        lancamentos_agrupados = db.query(
+            LancamentoCartao.mes_fatura, 
+            LancamentoCartao.ano_fatura, 
+            func.sum(LancamentoCartao.valor).label("total")
+        ).filter(
+            LancamentoCartao.cartao_id == cartao.id,
+            LancamentoCartao.usuario_id == usuario_id
+        ).group_by(
+            LancamentoCartao.mes_fatura, 
+            LancamentoCartao.ano_fatura
+        ).all()
+
+        limite_usado = 0.0
+        for mes, ano, total in lancamentos_agrupados:
+            descricao_fatura = f"Fatura Cartão {cartao.nome} - {mes:02d}/{ano}"
+            conta_paga = db.query(Conta).filter(
+                Conta.descricao == descricao_fatura,
+                Conta.usuario_id == usuario_id,
+                Conta.status.in_(["Pago", "Recebido", "PAGO", "RECEBIDO"])
+            ).first()
+            
+            if not conta_paga:
+                limite_usado += float(total or 0.0)
+                
+        cartao.limite_usado = limite_usado
+        cartao.limite_livre = float(cartao.limite) - limite_usado
+        return cartao
+
+    @staticmethod
     def listar(db: Session, usuario_id: int):
-        return db.query(CartaoCredito).filter(CartaoCredito.usuario_id == usuario_id).all()
+        cartoes = db.query(CartaoCredito).filter(CartaoCredito.usuario_id == usuario_id).all()
+        return [CartaoCreditoService._calcular_limites(db, c, usuario_id) for c in cartoes]
 
     @staticmethod
     def obter(db: Session, cartao_id: int, usuario_id: int):
-        return db.query(CartaoCredito).filter(
+        cartao = db.query(CartaoCredito).filter(
             CartaoCredito.id == cartao_id,
             CartaoCredito.usuario_id == usuario_id
         ).first()
+        if cartao:
+            return CartaoCreditoService._calcular_limites(db, cartao, usuario_id)
+        return None
 
     @staticmethod
     def criar(db: Session, dados: CartaoCreditoCreate, usuario_id: int):
@@ -275,7 +343,37 @@ class CartaoCreditoService:
         db.add(db_cartao)
         db.commit()
         db.refresh(db_cartao)
-        return db_cartao
+        return CartaoCreditoService._calcular_limites(db, db_cartao, usuario_id)
+
+    @staticmethod
+    def atualizar(db: Session, cartao_id: int, dados: CartaoCreditoUpdate, usuario_id: int):
+        db_cartao = db.query(CartaoCredito).filter(
+            CartaoCredito.id == cartao_id,
+            CartaoCredito.usuario_id == usuario_id
+        ).first()
+
+        if not db_cartao:
+            raise HTTPException(status_code=404, detail="Cartão de crédito não encontrado")
+
+        # Se for atualizar a conta corrente, validar se ela existe e pertence ao usuário
+        if dados.conta_corrente_id is not None:
+            db_cc = db.query(ContaCorrente).filter(
+                ContaCorrente.id == dados.conta_corrente_id,
+                ContaCorrente.usuario_id == usuario_id
+            ).first()
+            if not db_cc:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Nova conta corrente não encontrada ou não pertence ao usuário"
+                )
+
+        update_data = dados.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_cartao, key, value)
+
+        db.commit()
+        db.refresh(db_cartao)
+        return CartaoCreditoService._calcular_limites(db, db_cartao, usuario_id)
 
     @staticmethod
     def fechar_fatura(db: Session, cartao_id: int, dados: FechamentoFaturaRequest, usuario_id: int):

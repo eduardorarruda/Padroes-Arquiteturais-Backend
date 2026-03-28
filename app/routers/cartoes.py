@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db
 from ..schemas import (
-    CartaoCreditoCreate, CartaoCreditoResponse,
+    CartaoCreditoCreate, CartaoCreditoUpdate, CartaoCreditoResponse,
     LancamentoCartaoCreate, LancamentoCartaoResponse,
     FechamentoFaturaRequest, ContaResponse
 )
@@ -55,6 +55,27 @@ def criar_cartao(
 ):
     """Cria um novo cartão de crédito vinculado a uma conta corrente."""
     return CartaoCreditoService.criar(db, dados, usuario_id=usuario_atual.id)
+
+
+@router.put(
+    "/{id}",
+    response_model=CartaoCreditoResponse,
+    summary="Atualizar cartão de crédito",
+    description="Atualiza parcialmente as informações de um cartão de crédito. Envie apenas os campos que deseja alterar.",
+    response_description="O cartão de crédito atualizado.",
+    responses={
+        404: {"description": "Cartão de crédito não encontrado."},
+        400: {"description": "Nova conta corrente não encontrada ou não pertence ao usuário."}
+    }
+)
+def atualizar_cartao(
+    id: int,
+    dados: CartaoCreditoUpdate,
+    db: Session = Depends(get_db),
+    usuario_atual: Usuario = Depends(obter_usuario_atual),
+):
+    """Atualiza as informações de um cartão de crédito existente."""
+    return CartaoCreditoService.atualizar(db, cartao_id=id, dados=dados, usuario_id=usuario_atual.id)
 
 
 # ------------------------------------------

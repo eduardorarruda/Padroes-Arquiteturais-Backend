@@ -131,10 +131,30 @@ class CartaoCreditoCreate(BaseModel):
         }
     }
 
+class CartaoCreditoUpdate(BaseModel):
+    nome: Optional[str] = Field(None, description="Nome do cartão (ex: Nubank, Visa)")
+    limite: Optional[float] = Field(None, gt=0, description="Limite do cartão")
+    dia_fechamento: Optional[int] = Field(None, ge=1, le=31, description="Dia do fechamento da fatura")
+    dia_vencimento: Optional[int] = Field(None, ge=1, le=31, description="Dia do vencimento da fatura")
+    conta_corrente_id: Optional[int] = Field(None, description="Conta corrente padrão para pagamento da fatura")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "limite": 6000.00,
+                    "dia_vencimento": 10
+                }
+            ]
+        }
+    }
+
 class CartaoCreditoResponse(BaseModel):
     id: int
     nome: str
     limite: float
+    limite_usado: float = Field(default=0.0, description="Limite consumido por faturas não pagas ou abertas")
+    limite_livre: float = Field(default=0.0, description="Limite disponível (limite total - usado)")
     dia_fechamento: int
     dia_vencimento: int
     usuario_id: int
@@ -154,7 +174,7 @@ class LancamentoCartaoCreate(BaseModel):
     data_compra: date
     mes_fatura: int = Field(..., ge=1, le=12, description="Mês da fatura")
     ano_fatura: int = Field(..., ge=2000, description="Ano da fatura")
-    categoria_id: Optional[int] = None
+    categoria_id: int = Field(..., description="ID da categoria da compra")
 
     model_config = {
         "json_schema_extra": {
@@ -213,12 +233,15 @@ class ContaBase(BaseModel):
     descricao: str = Field(..., description="Descrição da conta")
     valor: float = Field(..., gt=0, description="Valor monetário da conta")
     data_vencimento: date
+    data_pagamento: Optional[date] = Field(None, description="Data em que a conta foi efetivamente paga/recebida")
     tipo: TipoContaEnum = Field(..., description="Tipo da conta: PAGAR ou RECEBER")
     status: str = Field(default="Pendente")
     categoria_id: Optional[int] = None
     parceiro_id: Optional[int] = None
 
 class ContaCreate(ContaBase):
+    conta_corrente_id: Optional[int] = Field(None, description="ID da Conta Corrente (obrigatório se status for PAGO ou RECEBIDO)")
+    
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -226,10 +249,12 @@ class ContaCreate(ContaBase):
                     "descricao": "Conta de Luz",
                     "valor": 180.00,
                     "data_vencimento": "2023-12-10",
+                    "data_pagamento": "2023-12-10",
                     "tipo": "PAGAR",
-                    "status": "Pendente",
+                    "status": "PAGO",
                     "categoria_id": 2,
-                    "parceiro_id": 1
+                    "parceiro_id": 1,
+                    "conta_corrente_id": 1
                 }
             ]
         }
@@ -239,6 +264,7 @@ class ContaUpdate(BaseModel):
     descricao: Optional[str] = None
     valor: Optional[float] = None
     data_vencimento: Optional[date] = None
+    data_pagamento: Optional[date] = None
     tipo: Optional[TipoContaEnum] = None
     status: Optional[str] = None
     categoria_id: Optional[int] = None
@@ -248,6 +274,7 @@ class ContaUpdate(BaseModel):
 class ContaBaixa(BaseModel):
     """Schema dedicado para a ação de baixa de uma conta."""
     conta_corrente_id: int = Field(..., description="ID da conta corrente para vincular na baixa")
+    data_pagamento: Optional[date] = Field(None, description="Opcional. Se não enviado, assume a data do dia de hoje.")
 
 class ContaResponse(ContaBase):
     id: int
