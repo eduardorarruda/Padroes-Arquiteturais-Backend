@@ -1,7 +1,13 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from fastapi import HTTPException
-from .models import Conta, Usuario, Categoria, Parceiro, ContaCorrente
-from .schemas import ContaCreate, ContaUpdate, UsuarioCreate, CategoriaCreate, ParceiroCreate, ContaCorrenteCreate, ContaCorrenteUpdate, ContaBaixa
+from datetime import date
+from .models import Conta, Usuario, Categoria, Parceiro, ContaCorrente, CartaoCredito, LancamentoCartao
+from .schemas import (
+    ContaCreate, ContaUpdate, UsuarioCreate, CategoriaCreate, ParceiroCreate,
+    ContaCorrenteCreate, ContaCorrenteUpdate, ContaBaixa,
+    CartaoCreditoCreate, LancamentoCartaoCreate, FechamentoFaturaRequest
+)
 from .security import obter_hash_senha
 
 # ==========================================
@@ -229,3 +235,154 @@ class ContaService:
             db.commit()
             return True
         return False
+
+# ==========================================
+# SERVIÇOS DE CARTÃO DE CRÉDITO
+# ==========================================
+class CartaoCreditoService:
+    @staticmethod
+    def listar(db: Session, usuario_id: int):
+        return db.query(CartaoCredito).filter(CartaoCredito.usuario_id == usuario_id).all()
+
+    @staticmethod
+    def obter(db: Session, cartao_id: int, usuario_id: int):
+        return db.query(CartaoCredito).filter(
+            CartaoCredito.id == cartao_id,
+            CartaoCredito.usuario_id == usuario_id
+        ).first()
+
+    @staticmethod
+    def criar(db: Session, dados: CartaoCreditoCreate, usuario_id: int):
+        # Validar que a conta corrente existe e pertence ao usuário
+        db_cc = db.query(ContaCorrente).filter(
+            ContaCorrente.id == dados.conta_corrente_id,
+            ContaCorrente.usuario_id == usuario_id
+        ).first()
+        if not db_cc:
+            raise HTTPException(
+                status_code=400,
+                detail="Conta corrente não encontrada ou não pertence ao usuário"
+            )
+
+        db_cartao = CartaoCredito(
+            nome=dados.nome,
+            limite=dados.limite,
+            dia_fechamento=dados.dia_fechamento,
+            dia_vencimento=dados.dia_vencimento,
+            usuario_id=usuario_id,
+            conta_corrente_id=dados.conta_corrente_id
+        )
+        db.add(db_cartao)
+        db.commit()
+        db.refresh(db_cartao)
+        return db_cartao
+
+    @staticmethod
+    def fechar_fatura(db: Session, cartao_id: int, dados: FechamentoFaturaRequest, usuario_id: int):
+        """Fecha a fatura do cartão: soma lançamentos e cria uma Conta a Pagar."""
+        # Buscar o cartão
+        db_cartao = db.query(CartaoCredito).filter(
+            CartaoCredito.id == cartao_id,
+            CartaoCredito.usuario_id == usuario_id
+        ).first()
+        if not db_cartao:
+            raise HTTPException(status_code=404, detail="Cartão não encontrado")
+
+        # Verificar se já existe fatura fechada para este mês/ano
+        descricao_fatura = f"Fatura Cartão {db_cartao.nome} - {dados.mes:02d}/{dados.ano}"
+        fatura_existente = db.query(Conta).filter(
+            Conta.descricao == descricao_fatura,
+            Conta.usuario_id == usuario_id
+        ).first()
+        if fatura_existente:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Fatura de {dados.mes:02d}/{dados.ano} já foi fechada para este cartão"
+            )
+
+        # Somar os lançamentos do mês/ano
+        total = db.query(func.sum(LancamentoCartao.valor)).filter(
+            LancamentoCartao.cartao_id == cartao_id,
+            LancamentoCartao.mes_fatura == dados.mes,
+            LancamentoCartao.ano_fatura == dados.ano,
+            LancamentoCartao.usuario_id == usuario_id
+        ).scalar()
+
+        if not total or total == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Não há lançamentos para o cartão no período {dados.mes:02d}/{dados.ano}"
+            )
+
+        # Calcular data de vencimento
+        # Se o dia_vencimento cai no mês seguinte ao fechamento
+        mes_vencimento = dados.mes + 1 if dados.mes < 12 else 1
+        ano_vencimento = dados.ano if dados.mes < 12 else dados.ano + 1
+
+        # Ajustar dia de vencimento para meses com menos dias
+        import calendar
+        ultimo_dia = calendar.monthrange(ano_vencimento, mes_vencimento)[1]
+        dia_venc = min(db_cartao.dia_vencimento, ultimo_dia)
+
+        data_vencimento = date(ano_vencimento, mes_vencimento, dia_venc)
+
+        # Criar a Conta a Pagar
+        db_conta = Conta(
+            descricao=descricao_fatura,
+            valor=total,
+            data_vencimento=data_vencimento,
+            tipo="PAGAR",
+            status="Pendente",
+            usuario_id=usuario_id
+        )
+        db.add(db_conta)
+        db.commit()
+        db.refresh(db_conta)
+        return db_conta
+
+# ==========================================
+# SERVIÇOS DE LANÇAMENTO DE CARTÃO
+# ==========================================
+class LancamentoCartaoService:
+    @staticmethod
+    def criar(db: Session, cartao_id: int, dados: LancamentoCartaoCreate, usuario_id: int):
+        # Verificar se o cartão existe e pertence ao usuário
+        db_cartao = db.query(CartaoCredito).filter(
+            CartaoCredito.id == cartao_id,
+            CartaoCredito.usuario_id == usuario_id
+        ).first()
+        if not db_cartao:
+            raise HTTPException(status_code=404, detail="Cartão não encontrado")
+
+        db_lancamento = LancamentoCartao(
+            descricao=dados.descricao,
+            valor=dados.valor,
+            data_compra=dados.data_compra,
+            mes_fatura=dados.mes_fatura,
+            ano_fatura=dados.ano_fatura,
+            cartao_id=cartao_id,
+            categoria_id=dados.categoria_id,
+            usuario_id=usuario_id
+        )
+        db.add(db_lancamento)
+        db.commit()
+        db.refresh(db_lancamento)
+        return db_lancamento
+
+    @staticmethod
+    def listar(
+        db: Session,
+        cartao_id: int,
+        usuario_id: int,
+        mes_fatura: int = None,
+        ano_fatura: int = None
+    ):
+        query = db.query(LancamentoCartao).filter(
+            LancamentoCartao.cartao_id == cartao_id,
+            LancamentoCartao.usuario_id == usuario_id
+        )
+        if mes_fatura is not None:
+            query = query.filter(LancamentoCartao.mes_fatura == mes_fatura)
+        if ano_fatura is not None:
+            query = query.filter(LancamentoCartao.ano_fatura == ano_fatura)
+        return query.all()

@@ -84,6 +84,65 @@ class ContaCorrenteResponse(BaseModel):
         from_attributes = True
 
 # ==========================================
+# SCHEMAS DE CARTÃO DE CRÉDITO
+# ==========================================
+
+class CartaoCreditoCreate(BaseModel):
+    nome: str = Field(..., description="Nome do cartão (ex: Nubank, Visa)")
+    limite: float = Field(..., gt=0, description="Limite do cartão")
+    dia_fechamento: int = Field(..., ge=1, le=31, description="Dia do fechamento da fatura")
+    dia_vencimento: int = Field(..., ge=1, le=31, description="Dia do vencimento da fatura")
+    conta_corrente_id: int = Field(..., description="Conta corrente padrão para pagamento da fatura")
+
+class CartaoCreditoResponse(BaseModel):
+    id: int
+    nome: str
+    limite: float
+    dia_fechamento: int
+    dia_vencimento: int
+    usuario_id: int
+    conta_corrente_id: int
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+# ==========================================
+# SCHEMAS DE LANÇAMENTO DE CARTÃO
+# ==========================================
+
+class LancamentoCartaoCreate(BaseModel):
+    descricao: str = Field(..., description="Descrição da compra")
+    valor: float = Field(..., gt=0, description="Valor da compra")
+    data_compra: date
+    mes_fatura: int = Field(..., ge=1, le=12, description="Mês da fatura")
+    ano_fatura: int = Field(..., ge=2000, description="Ano da fatura")
+    categoria_id: Optional[int] = None
+
+class LancamentoCartaoResponse(BaseModel):
+    id: int
+    descricao: str
+    valor: float
+    data_compra: date
+    mes_fatura: int
+    ano_fatura: int
+    cartao_id: int
+    categoria_id: Optional[int] = None
+    usuario_id: int
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+# ==========================================
+# SCHEMA DE FECHAMENTO DE FATURA
+# ==========================================
+
+class FechamentoFaturaRequest(BaseModel):
+    mes: int = Field(..., ge=1, le=12, description="Mês da fatura a fechar")
+    ano: int = Field(..., ge=2000, description="Ano da fatura a fechar")
+
+# ==========================================
 # SCHEMAS DE CONTA (PAGAR / RECEBER)
 # ==========================================
 

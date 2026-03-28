@@ -23,6 +23,8 @@ class Usuario(Base):
     categorias = relationship("Categoria", back_populates="usuario")
     parceiros = relationship("Parceiro", back_populates="usuario")
     contas_correntes = relationship("ContaCorrente", back_populates="usuario")
+    cartoes = relationship("CartaoCredito", back_populates="usuario")
+    lancamentos_cartao = relationship("LancamentoCartao", back_populates="usuario")
 
 class Categoria(Base):
     __tablename__ = "categorias"
@@ -33,6 +35,7 @@ class Categoria(Base):
 
     usuario = relationship("Usuario", back_populates="categorias")
     contas = relationship("Conta", back_populates="categoria")
+    lancamentos_cartao = relationship("LancamentoCartao", back_populates="categoria")
 
 class Parceiro(Base):
     __tablename__ = "parceiros"
@@ -55,6 +58,39 @@ class ContaCorrente(Base):
 
     usuario = relationship("Usuario", back_populates="contas_correntes")
     contas = relationship("Conta", back_populates="conta_corrente")
+    cartoes = relationship("CartaoCredito", back_populates="conta_corrente")
+
+class CartaoCredito(Base):
+    __tablename__ = "cartoes_credito"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(100), nullable=False)
+    limite = Column(Numeric(10, 2), nullable=False)
+    dia_fechamento = Column(Integer, nullable=False)
+    dia_vencimento = Column(Integer, nullable=False)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    conta_corrente_id = Column(Integer, ForeignKey("contas_correntes.id"), nullable=False)
+
+    usuario = relationship("Usuario", back_populates="cartoes")
+    conta_corrente = relationship("ContaCorrente", back_populates="cartoes")
+    lancamentos = relationship("LancamentoCartao", back_populates="cartao")
+
+class LancamentoCartao(Base):
+    __tablename__ = "lancamentos_cartao"
+
+    id = Column(Integer, primary_key=True, index=True)
+    descricao = Column(String(255), nullable=False)
+    valor = Column(Numeric(10, 2), nullable=False)
+    data_compra = Column(Date, nullable=False)
+    mes_fatura = Column(Integer, nullable=False)
+    ano_fatura = Column(Integer, nullable=False)
+    cartao_id = Column(Integer, ForeignKey("cartoes_credito.id"), nullable=False)
+    categoria_id = Column(Integer, ForeignKey("categorias.id"), nullable=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+
+    cartao = relationship("CartaoCredito", back_populates="lancamentos")
+    categoria = relationship("Categoria", back_populates="lancamentos_cartao")
+    usuario = relationship("Usuario", back_populates="lancamentos_cartao")
 
 class Conta(Base):
     __tablename__ = "contas"
