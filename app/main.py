@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from .routers import contas, auth, categorias, parceiros
 
@@ -9,6 +10,15 @@ app = FastAPI(
     title="API de Controle Financeiro",
     description="API para gerenciamento de contas a pagar",
     version="1.0.0"
+)
+
+# BUG 4 FIX — CORS configurado ANTES dos routers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # ajuste para produção
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Inclui as rotas
