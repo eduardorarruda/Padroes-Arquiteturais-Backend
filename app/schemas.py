@@ -61,6 +61,32 @@ class ParceiroResponse(ParceiroBase):
         orm_mode = True
         from_attributes = True
 
+# ==========================================
+# SCHEMAS DE CONTA CORRENTE
+# ==========================================
+
+class ContaCorrenteCreate(BaseModel):
+    descricao: str = Field(..., description="Descrição da conta corrente")
+    saldo: float = Field(default=0, description="Saldo inicial da conta corrente")
+
+class ContaCorrenteUpdate(BaseModel):
+    descricao: Optional[str] = None
+    saldo: Optional[float] = None
+
+class ContaCorrenteResponse(BaseModel):
+    id: int
+    descricao: str
+    saldo: float
+    usuario_id: int
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+# ==========================================
+# SCHEMAS DE CONTA (PAGAR / RECEBER)
+# ==========================================
+
 class ContaBase(BaseModel):
     descricao: str = Field(..., description="Descrição da conta")
     valor: float = Field(..., gt=0, description="Valor monetário da conta")
@@ -81,10 +107,16 @@ class ContaUpdate(BaseModel):
     status: Optional[str] = None
     categoria_id: Optional[int] = None
     parceiro_id: Optional[int] = None
+    conta_corrente_id: Optional[int] = None
+
+class ContaBaixa(BaseModel):
+    """Schema dedicado para a ação de baixa de uma conta."""
+    conta_corrente_id: int = Field(..., description="ID da conta corrente para vincular na baixa")
 
 class ContaResponse(ContaBase):
     id: int
+    conta_corrente_id: Optional[int] = None
 
     class Config:
-        orm_mode = True # Permite que o Pydantic converta objetos SQLAlchemy para JSON (Pydantic v1)
-        from_attributes = True # Suporte para Pydantic v2
+        orm_mode = True
+        from_attributes = True

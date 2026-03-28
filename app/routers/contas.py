@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from ..database import get_db
-from ..schemas import ContaResponse, ContaCreate, ContaUpdate
+from ..schemas import ContaResponse, ContaCreate, ContaUpdate, ContaBaixa
 from ..services import ContaService
 from ..models import Usuario
 from .auth import obter_usuario_atual
@@ -90,6 +90,18 @@ def atualizar_conta(
     if not db_conta:
         raise HTTPException(status_code=404, detail="Conta não encontrada ou não pertence ao usuário")
     return db_conta
+
+
+@router.patch("/{conta_id}/baixa", response_model=ContaResponse, summary="Dar baixa em uma conta")
+def baixar_conta(
+    conta_id: int,
+    baixa: ContaBaixa,
+    db: Session = Depends(get_db),
+    usuario_atual: Usuario = Depends(obter_usuario_atual),
+):
+    """Realiza a baixa de uma conta, alterando o status para 'Pago' ou 'Recebido'
+    e vinculando a uma conta corrente. O campo `conta_corrente_id` é obrigatório."""
+    return ContaService.baixar_conta(db, conta_id, baixa, usuario_id=usuario_atual.id)
 
 
 @router.delete("/{conta_id}", summary="Deletar conta")

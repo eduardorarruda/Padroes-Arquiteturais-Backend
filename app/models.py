@@ -22,6 +22,7 @@ class Usuario(Base):
     contas = relationship("Conta", back_populates="dono")
     categorias = relationship("Categoria", back_populates="usuario")
     parceiros = relationship("Parceiro", back_populates="usuario")
+    contas_correntes = relationship("ContaCorrente", back_populates="usuario")
 
 class Categoria(Base):
     __tablename__ = "categorias"
@@ -44,6 +45,17 @@ class Parceiro(Base):
     usuario = relationship("Usuario", back_populates="parceiros")
     contas = relationship("Conta", back_populates="parceiro")
 
+class ContaCorrente(Base):
+    __tablename__ = "contas_correntes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    descricao = Column(String(255), nullable=False)
+    saldo = Column(Numeric(10, 2), nullable=False, default=0)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+
+    usuario = relationship("Usuario", back_populates="contas_correntes")
+    contas = relationship("Conta", back_populates="conta_corrente")
+
 class Conta(Base):
     __tablename__ = "contas"
 
@@ -56,7 +68,9 @@ class Conta(Base):
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     categoria_id = Column(Integer, ForeignKey("categorias.id"), nullable=True)
     parceiro_id = Column(Integer, ForeignKey("parceiros.id"), nullable=True)
+    conta_corrente_id = Column(Integer, ForeignKey("contas_correntes.id"), nullable=True)
 
     dono = relationship("Usuario", back_populates="contas")
     categoria = relationship("Categoria", back_populates="contas")
     parceiro = relationship("Parceiro", back_populates="contas")
+    conta_corrente = relationship("ContaCorrente", back_populates="contas")

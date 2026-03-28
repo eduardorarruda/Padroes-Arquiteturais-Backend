@@ -23,6 +23,15 @@ CREATE TABLE parceiros (
 	FOREIGN KEY(usuario_id) REFERENCES usuarios (id)
 );
 
+CREATE TABLE contas_correntes (
+	id SERIAL NOT NULL, 
+	descricao VARCHAR(255) NOT NULL, 
+	saldo NUMERIC(10, 2) NOT NULL DEFAULT 0, 
+	usuario_id INTEGER NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(usuario_id) REFERENCES usuarios (id)
+);
+
 CREATE TABLE contas (
 	id SERIAL NOT NULL, 
 	descricao VARCHAR(255) NOT NULL, 
@@ -33,9 +42,10 @@ CREATE TABLE contas (
 	usuario_id INTEGER NOT NULL, 
 	categoria_id INTEGER, 
 	parceiro_id INTEGER, 
+	conta_corrente_id INTEGER, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(usuario_id) REFERENCES usuarios (id), 
 	FOREIGN KEY(categoria_id) REFERENCES categorias (id), 
-	FOREIGN KEY(parceiro_id) REFERENCES parceiros (id)
+	FOREIGN KEY(parceiro_id) REFERENCES parceiros (id),
+	FOREIGN KEY(conta_corrente_id) REFERENCES contas_correntes (id)
 );
-
