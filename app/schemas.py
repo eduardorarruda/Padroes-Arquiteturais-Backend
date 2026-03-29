@@ -61,9 +61,23 @@ class CategoriaResponse(CategoriaBase):
 class ParceiroBase(BaseModel):
     nome: str
     tipo: str = Field(..., description="Deve ser 'Cliente' ou 'Fornecedor'")
+    razao_social: Optional[str] = None
+    nome_fantasia: Optional[str] = None
+    cpf_cnpj: Optional[str] = Field(None, max_length=18, description="CPF (11 dígitos) ou CNPJ (14 dígitos), apenas números")
+    endereco: Optional[str] = None
+    data_nascimento_fundacao: Optional[date] = None
 
 class ParceiroCreate(ParceiroBase):
     pass
+
+class ParceiroUpdate(BaseModel):
+    nome: Optional[str] = None
+    tipo: Optional[str] = None
+    razao_social: Optional[str] = None
+    nome_fantasia: Optional[str] = None
+    cpf_cnpj: Optional[str] = Field(None, max_length=18)
+    endereco: Optional[str] = None
+    data_nascimento_fundacao: Optional[date] = None
 
 class ParceiroResponse(ParceiroBase):
     id: int
@@ -210,6 +224,24 @@ class LancamentoCartaoCreate(BaseModel):
                     "categoria_id": 1,
                     "quantidade_parcelas": 3,
                     "dividir_valor": True
+                }
+            ]
+        }
+    }
+
+class LancamentoCartaoUpdate(BaseModel):
+    descricao: Optional[str] = Field(None, description="Nova descrição do lançamento")
+    valor: Optional[float] = Field(None, gt=0, description="Novo valor do lançamento")
+    data_compra: Optional[date] = None
+    categoria_id: Optional[int] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "descricao": "Compra corrigida",
+                    "valor": 99.90,
+                    "categoria_id": 2
                 }
             ]
         }

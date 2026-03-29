@@ -104,3 +104,9 @@ ALTER TABLE contas ADD COLUMN total_parcelas INT NOT NULL DEFAULT 1;
 ALTER TABLE lancamentos_cartao ADD COLUMN grupo_parcelamento VARCHAR(50);
 ALTER TABLE lancamentos_cartao ADD COLUMN numero_parcela INT NOT NULL DEFAULT 1;
 ALTER TABLE lancamentos_cartao ADD COLUMN total_parcelas INT NOT NULL DEFAULT 1;
+
+ALTER TABLE parceiros ADD COLUMN razao_social VARCHAR(255) NULL;
+ALTER TABLE parceiros ADD COLUMN nome_fantasia VARCHAR(255) NULL;
+ALTER TABLE parceiros ADD COLUMN cpf_cnpj VARCHAR(18) NULL;
+ALTER TABLE parceiros ADD COLUMN endereco VARCHAR(500) NULL;
+ALTER TABLE parceiros ADD COLUMN data_nascimento_fundacao DATE NULL;

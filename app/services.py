@@ -51,17 +51,107 @@ class CategoriaService:
 # SERVIÇOS DE PARCEIRO
 # ==========================================
 class ParceiroService:
+    
+    @staticmethod
+    def _buscar_dados_cnpj(cnpj: str) -> dict:
+        """Consulta a BrasilAPI e retorna os dados mapeados, ou {} em caso de falha."""
+        import httpx
+        cnpj_numerico = "".join(filter(str.isdigit, cnpj))
+        try:
+            response = httpx.get(
+                f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_numerico}",
+                timeout=10.0
+            )
+            if response.status_code != 200:
+                return {}
+            dados = response.json()
+
+            # Monta o endereço concatenando os campos disponíveis
+            partes_endereco = filter(None, [
+                dados.get("logradouro"),
+                dados.get("numero"),
+                dados.get("bairro"),
+                dados.get("municipio"),
+                dados.get("uf"),
+            ])
+            endereco = ", ".join(partes_endereco)
+
+            # Converte data_inicio_atividade ("YYYY-MM-DD") para objeto date
+            data_fundacao = None
+            data_str = dados.get("data_inicio_atividade")
+            if data_str:
+                try:
+                    from datetime import date as date_type
+                    data_fundacao = date_type.fromisoformat(data_str)
+                except ValueError:
+                    pass
+
+            return {
+                "razao_social": dados.get("razao_social"),
+                "nome_fantasia": dados.get("nome_fantasia") or None,
+                "endereco": endereco or None,
+                "data_nascimento_fundacao": data_fundacao,
+            }
+        except Exception:
+            # Falha silenciosa: a criação do parceiro prossegue sem os dados da API
+            return {}
+
+    @staticmethod
+    def _e_cnpj(cpf_cnpj: str) -> bool:
+        """Retorna True se o valor tiver exatamente 14 dígitos numéricos (CNPJ)."""
+        return len("".join(filter(str.isdigit, cpf_cnpj))) == 14
+
     @staticmethod
     def listar_parceiros(db: Session, usuario_id: int):
         return db.query(Parceiro).filter(Parceiro.usuario_id == usuario_id).all()
 
     @staticmethod
     def criar_parceiro(db: Session, parceiro: ParceiroCreate, usuario_id: int):
-        db_parceiro = Parceiro(nome=parceiro.nome, tipo=parceiro.tipo, usuario_id=usuario_id)
+        dados = parceiro.dict() if hasattr(parceiro, "dict") else parceiro.model_dump()
+
+        # Auto-preenchimento via CNPJ quando os campos de detalhe estiverem vazios
+        cpf_cnpj = dados.get("cpf_cnpj") or ""
+        campos_vazios = not dados.get("razao_social") and not dados.get("endereco")
+
+        if cpf_cnpj and ParceiroService._e_cnpj(cpf_cnpj) and campos_vazios:
+            dados_api = ParceiroService._buscar_dados_cnpj(cpf_cnpj)
+            for campo, valor in dados_api.items():
+                if valor is not None:
+                    dados[campo] = valor
+
+        db_parceiro = Parceiro(**dados, usuario_id=usuario_id)
         db.add(db_parceiro)
         db.commit()
         db.refresh(db_parceiro)
         return db_parceiro
+
+    @staticmethod
+    def atualizar_parceiro(db: Session, parceiro_id: int, dados_update: "ParceiroUpdate", usuario_id: int):
+        par = db.query(Parceiro).filter(
+            Parceiro.id == parceiro_id,
+            Parceiro.usuario_id == usuario_id,
+        ).first()
+        if not par:
+            return None
+
+        dados = dados_update.dict(exclude_unset=True) if hasattr(dados_update, "dict") else dados_update.model_dump(exclude_unset=True)
+
+        # Auto-preenchimento via CNPJ também na atualização
+        cpf_cnpj = dados.get("cpf_cnpj") or getattr(par, "cpf_cnpj", "") or ""
+        campos_vazios = not dados.get("razao_social") and not dados.get("endereco")
+
+        if cpf_cnpj and ParceiroService._e_cnpj(cpf_cnpj) and campos_vazios:
+            dados_api = ParceiroService._buscar_dados_cnpj(cpf_cnpj)
+            for campo, valor in dados_api.items():
+                if valor is not None and campo not in dados:
+                    dados[campo] = valor
+
+        for key, value in dados.items():
+            setattr(par, key, value)
+
+        db.commit()
+        db.refresh(par)
+        return par
 
 # ==========================================
 # SERVIÇOS DE CONTA CORRENTE
@@ -605,6 +695,55 @@ class LancamentoCartaoService:
         if ano_fatura is not None:
             query = query.filter(LancamentoCartao.ano_fatura == ano_fatura)
         return query.all()
+
+    @staticmethod
+    def atualizar(
+        db: Session,
+        lancamento_id: int,
+        cartao_id: int,
+        dados: "LancamentoCartaoUpdate",
+        usuario_id: int,
+    ):
+        """Atualiza campos permitidos de um lançamento sem alterar fatura ou cartão."""
+        db_lancamento = db.query(LancamentoCartao).filter(
+            LancamentoCartao.id == lancamento_id,
+            LancamentoCartao.cartao_id == cartao_id,
+            LancamentoCartao.usuario_id == usuario_id,
+        ).first()
+        if not db_lancamento:
+            raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+
+        update_data = (
+            dados.dict(exclude_unset=True)
+            if hasattr(dados, "dict")
+            else dados.model_dump(exclude_unset=True)
+        )
+        for key, value in update_data.items():
+            setattr(db_lancamento, key, value)
+
+        db.commit()
+        db.refresh(db_lancamento)
+        return db_lancamento
+
+    @staticmethod
+    def deletar(
+        db: Session,
+        lancamento_id: int,
+        cartao_id: int,
+        usuario_id: int,
+    ):
+        """Remove um lançamento do banco de dados."""
+        db_lancamento = db.query(LancamentoCartao).filter(
+            LancamentoCartao.id == lancamento_id,
+            LancamentoCartao.cartao_id == cartao_id,
+            LancamentoCartao.usuario_id == usuario_id,
+        ).first()
+        if not db_lancamento:
+            raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+
+        db.delete(db_lancamento)
+        db.commit()
+        return True
 
 # ==========================================
 # SERVIÇOS DE NOTIFICAÇÃO

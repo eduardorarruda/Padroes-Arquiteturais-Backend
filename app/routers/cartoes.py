@@ -4,7 +4,7 @@ from typing import List, Optional
 from ..database import get_db
 from ..schemas import (
     CartaoCreditoCreate, CartaoCreditoUpdate, CartaoCreditoResponse,
-    LancamentoCartaoCreate, LancamentoCartaoResponse,
+    LancamentoCartaoCreate, LancamentoCartaoUpdate, LancamentoCartaoResponse,
     FechamentoFaturaRequest, ContaResponse
 )
 from ..services import CartaoCreditoService, LancamentoCartaoService
@@ -148,3 +148,56 @@ def fechar_fatura(
     """Fecha a fatura do cartão para o mês/ano informado.
     Soma todos os lançamentos e cria uma Conta a Pagar com o valor total."""
     return CartaoCreditoService.fechar_fatura(db, cartao_id=id, dados=dados, usuario_id=usuario_atual.id)
+
+@router.put(
+    "/{id}/lancamentos/{lancamento_id}",
+    response_model=LancamentoCartaoResponse,
+    summary="Atualizar lançamento do cartão",
+    description=(
+        "Atualiza `descricao`, `valor`, `data_compra` e/ou `categoria_id` de um lançamento existente. "
+        "Não é permitido alterar o cartão, o mês ou o ano da fatura para preservar a integridade do fechamento."
+    ),
+    response_description="O lançamento atualizado.",
+    responses={
+        404: {"description": "Lançamento não encontrado ou não pertence ao usuário/cartão."}
+    }
+)
+def atualizar_lancamento(
+    id: int,
+    lancamento_id: int,
+    dados: LancamentoCartaoUpdate,
+    db: Session = Depends(get_db),
+    usuario_atual: Usuario = Depends(obter_usuario_atual),
+):
+    """Edita campos de um lançamento sem mover a fatura de mês/ano."""
+    return LancamentoCartaoService.atualizar(
+        db,
+        lancamento_id=lancamento_id,
+        cartao_id=id,
+        dados=dados,
+        usuario_id=usuario_atual.id,
+    )
+
+@router.delete(
+    "/{id}/lancamentos/{lancamento_id}",
+    status_code=204,
+    summary="Excluir lançamento do cartão",
+    description="Remove permanentemente um lançamento de cartão. Não é possível desfazer esta ação.",
+    responses={
+        404: {"description": "Lançamento não encontrado ou não pertence ao usuário/cartão."}
+    }
+)
+def deletar_lancamento(
+    id: int,
+    lancamento_id: int,
+    db: Session = Depends(get_db),
+    usuario_atual: Usuario = Depends(obter_usuario_atual),
+):
+    """Remove um lançamento do cartão de crédito."""
+    LancamentoCartaoService.deletar(
+        db,
+        lancamento_id=lancamento_id,
+        cartao_id=id,
+        usuario_id=usuario_atual.id,
+    )
+    return None

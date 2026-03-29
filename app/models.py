@@ -44,7 +44,12 @@ class Parceiro(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String(255), nullable=False)
-    tipo = Column(String(50), nullable=False) # Ex: "Cliente" ou "Fornecedor"
+    tipo = Column(String(50), nullable=False)  # "Cliente" ou "Fornecedor"
+    razao_social = Column(String(255), nullable=True)
+    nome_fantasia = Column(String(255), nullable=True)
+    cpf_cnpj = Column(String(18), nullable=True)
+    endereco = Column(String(500), nullable=True)
+    data_nascimento_fundacao = Column(Date, nullable=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
 
     usuario = relationship("Usuario", back_populates="parceiros")
