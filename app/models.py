@@ -1,5 +1,6 @@
 import enum
-from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey, Enum
+from datetime import datetime
+from sqlalchemy import Column, Integer, String, Numeric, Date, DateTime, Boolean, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -25,6 +26,7 @@ class Usuario(Base):
     contas_correntes = relationship("ContaCorrente", back_populates="usuario")
     cartoes = relationship("CartaoCredito", back_populates="usuario")
     lancamentos_cartao = relationship("LancamentoCartao", back_populates="usuario")
+    notificacoes = relationship("Notificacao", back_populates="usuario")
 
 class Categoria(Base):
     __tablename__ = "categorias"
@@ -100,6 +102,10 @@ class Conta(Base):
     valor = Column(Numeric(10, 2), nullable=False)
     data_vencimento = Column(Date, nullable=False)
     data_pagamento = Column(Date, nullable=True)
+    juros = Column(Numeric(10, 2), nullable=False, default=0.00)
+    multa = Column(Numeric(10, 2), nullable=False, default=0.00)
+    desconto = Column(Numeric(10, 2), nullable=False, default=0.00)
+    acrescimo = Column(Numeric(10, 2), nullable=False, default=0.00)
     tipo = Column(Enum(TipoConta), nullable=False)
     status = Column(String(20), nullable=False, default="Pendente")
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
@@ -111,3 +117,16 @@ class Conta(Base):
     categoria = relationship("Categoria", back_populates="contas")
     parceiro = relationship("Parceiro", back_populates="contas")
     conta_corrente = relationship("ContaCorrente", back_populates="contas")
+
+class Notificacao(Base):
+    __tablename__ = "notificacoes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mensagem = Column(String(500), nullable=False)
+    lida = Column(Boolean, nullable=False, default=False)
+    data_criacao = Column(DateTime, nullable=False, default=datetime.utcnow)
+    tipo = Column(String(20), nullable=False)  # 'VENCIMENTO' ou 'FATURA'
+    referencia_id = Column(Integer, nullable=True)  # ID da conta ou cartão (para evitar duplicatas)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+
+    usuario = relationship("Usuario", back_populates="notificacoes")

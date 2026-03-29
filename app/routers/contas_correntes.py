@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from ..database import get_db
-from ..schemas import ContaCorrenteCreate, ContaCorrenteUpdate, ContaCorrenteResponse
+from ..schemas import ContaCorrenteCreate, ContaCorrenteUpdate, ContaCorrenteResponse, TransferenciaRequest
 from ..services import ContaCorrenteService
 from ..models import Usuario
 from .auth import obter_usuario_atual
@@ -73,3 +73,14 @@ def deletar_conta_corrente(
     # Se resultado é True, a exclusão foi bem-sucedida
     # Se houve erro (contas vinculadas), o service já lançou HTTPException 400
     return {"message": "Conta corrente deletada com sucesso"}
+
+
+@router.post("/transferir", summary="Transferir entre contas correntes")
+def transferir_contas_correntes(
+    dados: TransferenciaRequest,
+    db: Session = Depends(get_db),
+    usuario_atual: Usuario = Depends(obter_usuario_atual),
+):
+    """Realiza uma transferência de saldo entre duas contas correntes."""
+    ContaCorrenteService.transferir(db, dados, usuario_id=usuario_atual.id)
+    return {"message": "Transferência realizada com sucesso!"}

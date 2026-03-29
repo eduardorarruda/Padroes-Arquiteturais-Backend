@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, EmailStr
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 from enum import Enum
 
@@ -105,6 +105,23 @@ class ContaCorrenteResponse(BaseModel):
     class Config:
         orm_mode = True
         from_attributes = True
+
+class TransferenciaRequest(BaseModel):
+    conta_origem_id: int = Field(..., description="ID da conta corrente de origem")
+    conta_destino_id: int = Field(..., description="ID da conta corrente de destino")
+    valor: float = Field(..., gt=0, description="Valor da transferência")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "conta_origem_id": 1,
+                    "conta_destino_id": 2,
+                    "valor": 150.50
+                }
+            ]
+        }
+    }
 
 # ==========================================
 # SCHEMAS DE CARTÃO DE CRÉDITO
@@ -234,6 +251,10 @@ class ContaBase(BaseModel):
     valor: float = Field(..., gt=0, description="Valor monetário da conta")
     data_vencimento: date
     data_pagamento: Optional[date] = Field(None, description="Data em que a conta foi efetivamente paga/recebida")
+    juros: Optional[float] = Field(default=0.0, description="Valor de juros")
+    multa: Optional[float] = Field(default=0.0, description="Valor de multa")
+    desconto: Optional[float] = Field(default=0.0, description="Valor de desconto")
+    acrescimo: Optional[float] = Field(default=0.0, description="Valor de acréscimo")
     tipo: TipoContaEnum = Field(..., description="Tipo da conta: PAGAR ou RECEBER")
     status: str = Field(default="Pendente")
     categoria_id: Optional[int] = None
@@ -279,6 +300,23 @@ class ContaBaixa(BaseModel):
 class ContaResponse(ContaBase):
     id: int
     conta_corrente_id: Optional[int] = None
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+# ==========================================
+# SCHEMAS DE NOTIFICAÇÃO
+# ==========================================
+
+class NotificacaoResponse(BaseModel):
+    id: int
+    mensagem: str
+    lida: bool
+    data_criacao: datetime
+    tipo: str
+    referencia_id: Optional[int] = None
+    usuario_id: int
 
     class Config:
         orm_mode = True

@@ -1,11 +1,11 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, extract
 from fastapi import HTTPException
-from datetime import date
-from .models import Conta, Usuario, Categoria, Parceiro, ContaCorrente, CartaoCredito, LancamentoCartao
+from datetime import date, datetime
+from .models import Conta, Usuario, Categoria, Parceiro, ContaCorrente, CartaoCredito, LancamentoCartao, Notificacao
 from .schemas import (
     ContaCreate, ContaUpdate, UsuarioCreate, CategoriaCreate, ParceiroCreate,
-    ContaCorrenteCreate, ContaCorrenteUpdate, ContaBaixa,
+    ContaCorrenteCreate, ContaCorrenteUpdate, ContaBaixa, TransferenciaRequest,
     CartaoCreditoCreate, CartaoCreditoUpdate, LancamentoCartaoCreate, FechamentoFaturaRequest
 )
 from .security import obter_hash_senha
@@ -132,6 +132,44 @@ class ContaCorrenteService:
         db.delete(db_cc)
         db.commit()
         return True
+
+    @staticmethod
+    def transferir(db: Session, dados: TransferenciaRequest, usuario_id: int):
+        if dados.conta_origem_id == dados.conta_destino_id:
+            raise HTTPException(status_code=400, detail="A conta de origem não pode ser a mesma de destino.")
+
+        # Buscar conta origem e bloquear para atualização
+        conta_origem = db.query(ContaCorrente).filter(
+            ContaCorrente.id == dados.conta_origem_id,
+            ContaCorrente.usuario_id == usuario_id
+        ).with_for_update().first()
+
+        if not conta_origem:
+            raise HTTPException(status_code=404, detail="Conta corrente de origem não encontrada.")
+
+        # Buscar conta destino e bloquear para atualização
+        conta_destino = db.query(ContaCorrente).filter(
+            ContaCorrente.id == dados.conta_destino_id,
+            ContaCorrente.usuario_id == usuario_id
+        ).with_for_update().first()
+
+        if not conta_destino:
+            raise HTTPException(status_code=404, detail="Conta corrente de destino não encontrada.")
+
+        if float(conta_origem.saldo) < dados.valor:
+            raise HTTPException(status_code=400, detail="Saldo insuficiente na conta de origem.")
+
+        try:
+            # Subtrair do saldo de origem
+            conta_origem.saldo = float(conta_origem.saldo) - dados.valor
+            # Adicionar ao saldo de destino
+            conta_destino.saldo = float(conta_destino.saldo) + dados.valor
+
+            db.commit()
+            return True
+        except Exception:
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Erro interno ao realizar transferência.")
 
 # ==========================================
 # CAMADA DE SERVIÇOS / REGRAS DE NEGÓCIO DE CONTA
@@ -484,3 +522,108 @@ class LancamentoCartaoService:
         if ano_fatura is not None:
             query = query.filter(LancamentoCartao.ano_fatura == ano_fatura)
         return query.all()
+
+# ==========================================
+# SERVIÇOS DE NOTIFICAÇÃO
+# ==========================================
+class NotificacaoService:
+    @staticmethod
+    def listar_nao_lidas(db: Session, usuario_id: int):
+        """Retorna todas as notificações não lidas do usuário."""
+        return (
+            db.query(Notificacao)
+            .filter(
+                Notificacao.usuario_id == usuario_id,
+                Notificacao.lida == False
+            )
+            .order_by(Notificacao.data_criacao.desc())
+            .all()
+        )
+
+    @staticmethod
+    def marcar_como_lida(db: Session, notificacao_id: int, usuario_id: int):
+        """Marca uma notificação como lida."""
+        db_notificacao = db.query(Notificacao).filter(
+            Notificacao.id == notificacao_id,
+            Notificacao.usuario_id == usuario_id
+        ).first()
+        if not db_notificacao:
+            raise HTTPException(status_code=404, detail="Notificação não encontrada")
+
+        db_notificacao.lida = True
+        db.commit()
+        db.refresh(db_notificacao)
+        return db_notificacao
+
+    @staticmethod
+    def sincronizar_notificacoes(db: Session, usuario_id: int):
+        """Verifica e gera alertas de contas vencidas e fechamento de fatura."""
+        hoje = date.today()
+        notificacoes_criadas = []
+
+        # -----------------------------------------------
+        # REGRA 1: Contas vencidas (Pendente + vencida)
+        # -----------------------------------------------
+        contas_vencidas = db.query(Conta).filter(
+            Conta.usuario_id == usuario_id,
+            Conta.status == "Pendente",
+            Conta.data_vencimento < hoje
+        ).all()
+
+        for conta in contas_vencidas:
+            # Alterar status para Atrasado
+            conta.status = "Atrasado"
+
+            # Verificar se já existe notificação para esta conta
+            notif_existente = db.query(Notificacao).filter(
+                Notificacao.usuario_id == usuario_id,
+                Notificacao.tipo == "VENCIMENTO",
+                Notificacao.referencia_id == conta.id
+            ).first()
+
+            if not notif_existente:
+                data_formatada = conta.data_vencimento.strftime("%d/%m/%Y")
+                nova_notif = Notificacao(
+                    mensagem=f"A conta '{conta.descricao}' venceu no dia {data_formatada}.",
+                    tipo="VENCIMENTO",
+                    referencia_id=conta.id,
+                    usuario_id=usuario_id
+                )
+                db.add(nova_notif)
+                notificacoes_criadas.append(nova_notif)
+
+        # -----------------------------------------------
+        # REGRA 2: Fechamento de fatura de cartões
+        # -----------------------------------------------
+        cartoes = db.query(CartaoCredito).filter(
+            CartaoCredito.usuario_id == usuario_id
+        ).all()
+
+        for cartao in cartoes:
+            if cartao.dia_fechamento <= hoje.day:
+                # Verificar se já existe notificação de FATURA para este cartão no mês atual
+                notif_fatura_existente = db.query(Notificacao).filter(
+                    Notificacao.usuario_id == usuario_id,
+                    Notificacao.tipo == "FATURA",
+                    Notificacao.referencia_id == cartao.id,
+                    extract('month', Notificacao.data_criacao) == hoje.month,
+                    extract('year', Notificacao.data_criacao) == hoje.year
+                ).first()
+
+                if not notif_fatura_existente:
+                    nova_notif = Notificacao(
+                        mensagem=f"A fatura do cartão '{cartao.nome}' fechou. Não se esqueça de lançar o fechamento.",
+                        tipo="FATURA",
+                        referencia_id=cartao.id,
+                        usuario_id=usuario_id
+                    )
+                    db.add(nova_notif)
+                    notificacoes_criadas.append(nova_notif)
+
+        db.commit()
+
+        # Refresh para retornar os IDs gerados
+        for notif in notificacoes_criadas:
+            db.refresh(notif)
+
+        return notificacoes_criadas
