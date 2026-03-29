@@ -538,20 +538,55 @@ class LancamentoCartaoService:
         if not db_cartao:
             raise HTTPException(status_code=404, detail="Cartão não encontrado")
 
-        db_lancamento = LancamentoCartao(
-            descricao=dados.descricao,
-            valor=dados.valor,
-            data_compra=dados.data_compra,
-            mes_fatura=dados.mes_fatura,
-            ano_fatura=dados.ano_fatura,
-            cartao_id=cartao_id,
-            categoria_id=dados.categoria_id,
-            usuario_id=usuario_id
-        )
-        db.add(db_lancamento)
+        lancamento_data = dados.dict() if hasattr(dados, 'dict') else dados.model_dump()
+        qtd_parcelas = lancamento_data.pop("quantidade_parcelas", 1)
+        dividir_valor = lancamento_data.pop("dividir_valor", False)
+
+        if qtd_parcelas <= 1:
+            db_lancamento = LancamentoCartao(**lancamento_data, cartao_id=cartao_id, usuario_id=usuario_id)
+            db.add(db_lancamento)
+            db.commit()
+            db.refresh(db_lancamento)
+            return db_lancamento
+
+        import uuid
+        grupo_uuid = str(uuid.uuid4())
+        valor_original = float(lancamento_data.get("valor", 0))
+        valor_parcela = round(valor_original / qtd_parcelas, 2) if dividir_valor else valor_original
+        
+        mes_fatura_base = lancamento_data.get("mes_fatura")
+        ano_fatura_base = lancamento_data.get("ano_fatura")
+        descricao_base = lancamento_data.get("descricao", "")
+        
+        primeiro_lancamento = None
+        
+        for i in range(1, qtd_parcelas + 1):
+            dados_parcela = lancamento_data.copy()
+            dados_parcela["grupo_parcelamento"] = grupo_uuid
+            dados_parcela["numero_parcela"] = i
+            dados_parcela["total_parcelas"] = qtd_parcelas
+            dados_parcela["valor"] = valor_parcela
+            dados_parcela["descricao"] = f"{descricao_base} ({i}/{qtd_parcelas})"
+            
+            # Cálculo do mês/ano da fatura
+            meses_avanco = i - 1
+            mes_novo = mes_fatura_base + meses_avanco
+            ano_adicional = (mes_novo - 1) // 12
+            mes_final = ((mes_novo - 1) % 12) + 1
+            ano_final = ano_fatura_base + ano_adicional
+            
+            dados_parcela["mes_fatura"] = mes_final
+            dados_parcela["ano_fatura"] = ano_final
+            
+            db_lancamento = LancamentoCartao(**dados_parcela, cartao_id=cartao_id, usuario_id=usuario_id)
+            db.add(db_lancamento)
+            
+            if i == 1:
+                primeiro_lancamento = db_lancamento
+                
         db.commit()
-        db.refresh(db_lancamento)
-        return db_lancamento
+        db.refresh(primeiro_lancamento)
+        return primeiro_lancamento
 
     @staticmethod
     def listar(

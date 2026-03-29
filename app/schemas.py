@@ -192,6 +192,11 @@ class LancamentoCartaoCreate(BaseModel):
     mes_fatura: int = Field(..., ge=1, le=12, description="Mês da fatura")
     ano_fatura: int = Field(..., ge=2000, description="Ano da fatura")
     categoria_id: int = Field(..., description="ID da categoria da compra")
+    grupo_parcelamento: Optional[str] = Field(None, description="UUID do parcelamento")
+    numero_parcela: int = Field(default=1, description="Número da parcela atual")
+    total_parcelas: int = Field(default=1, description="Total de parcelas")
+    quantidade_parcelas: int = Field(default=1, gt=0, description="Quantidade de parcelas a gerar")
+    dividir_valor: bool = Field(default=False, description="Se True, divide o valor pelas parcelas. Se False, repete.")
 
     model_config = {
         "json_schema_extra": {
@@ -202,7 +207,9 @@ class LancamentoCartaoCreate(BaseModel):
                     "data_compra": "2023-11-15",
                     "mes_fatura": 12,
                     "ano_fatura": 2023,
-                    "categoria_id": 1
+                    "categoria_id": 1,
+                    "quantidade_parcelas": 3,
+                    "dividir_valor": True
                 }
             ]
         }
@@ -218,6 +225,9 @@ class LancamentoCartaoResponse(BaseModel):
     cartao_id: int
     categoria_id: Optional[int] = None
     usuario_id: int
+    grupo_parcelamento: Optional[str] = None
+    numero_parcela: int = 1
+    total_parcelas: int = 1
 
     class Config:
         orm_mode = True

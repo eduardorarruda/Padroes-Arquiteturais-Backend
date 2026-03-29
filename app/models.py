@@ -89,6 +89,9 @@ class LancamentoCartao(Base):
     cartao_id = Column(Integer, ForeignKey("cartoes_credito.id"), nullable=False)
     categoria_id = Column(Integer, ForeignKey("categorias.id"), nullable=False)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    grupo_parcelamento = Column(String(50), nullable=True)
+    numero_parcela = Column(Integer, nullable=False, default=1)
+    total_parcelas = Column(Integer, nullable=False, default=1)
 
     cartao = relationship("CartaoCredito", back_populates="lancamentos")
     categoria = relationship("Categoria", back_populates="lancamentos_cartao")
