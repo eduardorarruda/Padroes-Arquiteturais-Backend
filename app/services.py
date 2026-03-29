@@ -207,36 +207,84 @@ class ContaService:
     def criar_conta(db: Session, conta: ContaCreate, usuario_id: int):
         conta_data = conta.dict() if hasattr(conta, 'dict') else conta.model_dump()
         
-        # Validação para conta que já nasce paga/recebida
+        # Remove os campos virtuais do Pydantic para não darem erro no SQLAlchemy
+        qtd_parcelas = conta_data.pop("quantidade_parcelas", 1)
+        intervalo_meses = conta_data.pop("intervalo_meses", 1)
+        dividir_valor = conta_data.pop("dividir_valor", False)
+        
+        # Validação para a conta original que nasça paga (geralmente só a primeira)
         status_atual = str(conta_data.get("status", "")).upper()
         if status_atual in ["PAGO", "RECEBIDO"]:
             if not conta_data.get("conta_corrente_id"):
-                raise HTTPException(
-                    status_code=400, 
-                    detail="É obrigatório informar a 'conta_corrente_id' quando a conta for criada com status PAGO ou RECEBIDO."
-                )
+                raise HTTPException(status_code=400, detail="É obrigatório informar a 'conta_corrente_id' quando a conta for criada com status PAGO ou RECEBIDO.")
             if not conta_data.get("data_pagamento"):
-                raise HTTPException(
-                    status_code=400, 
-                    detail="É obrigatório informar a 'data_pagamento' quando a conta for criada com status PAGO ou RECEBIDO."
-                )
+                raise HTTPException(status_code=400, detail="É obrigatório informar a 'data_pagamento' quando a conta for criada com status PAGO ou RECEBIDO.")
                 
-            # Validar se a conta corrente existe e pertence ao usuário
+            # Validar conta corrente
             db_cc = db.query(ContaCorrente).filter(
                 ContaCorrente.id == conta_data["conta_corrente_id"],
                 ContaCorrente.usuario_id == usuario_id
             ).first()
             if not db_cc:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="Conta corrente informada não encontrada ou não pertence ao usuário."
-                )
+                raise HTTPException(status_code=400, detail="Conta corrente informada não encontrada ou não pertence ao usuário.")
 
-        db_conta = Conta(**conta_data, usuario_id=usuario_id)
-        db.add(db_conta)
+        # Se for apenas 1 parcela, criar diretamente
+        if qtd_parcelas <= 1:
+            db_conta = Conta(**conta_data, usuario_id=usuario_id)
+            db.add(db_conta)
+            db.commit()
+            db.refresh(db_conta)
+            return db_conta
+
+        import uuid
+        import calendar
+        from datetime import date
+        
+        grupo_uuid = str(uuid.uuid4())
+        valor_original = float(conta_data.get("valor", 0))
+        valor_parcela = round(valor_original / qtd_parcelas, 2) if dividir_valor else valor_original
+        
+        data_base_vencimento = conta_data.get("data_vencimento")
+        descricao_base = conta_data.get("descricao", "")
+        
+        primeira_conta = None
+        
+        for i in range(1, qtd_parcelas + 1):
+            dados_parcela = conta_data.copy()
+            dados_parcela["grupo_parcelamento"] = grupo_uuid
+            dados_parcela["numero_parcela"] = i
+            dados_parcela["total_parcelas"] = qtd_parcelas
+            dados_parcela["valor"] = valor_parcela
+            dados_parcela["descricao"] = f"{descricao_base} ({i}/{qtd_parcelas})"
+            
+            # Ajuste de vencimento (exceto para a primeira parcela)
+            if i > 1:
+                meses_adicionais = (i - 1) * intervalo_meses
+                novo_mes = data_base_vencimento.month + meses_adicionais
+                ano_incremento = (novo_mes - 1) // 12
+                mes_final = ((novo_mes - 1) % 12) + 1
+                ano_final = data_base_vencimento.year + ano_incremento
+                
+                # Previne erro de dias que não existem no mês, ex: 31 Fev
+                ultimo_dia_mes = calendar.monthrange(ano_final, mes_final)[1]
+                dia_final = min(data_base_vencimento.day, ultimo_dia_mes)
+                
+                dados_parcela["data_vencimento"] = date(ano_final, mes_final, dia_final)
+                
+                # Limpar status de pagamento para parcelas futuras
+                dados_parcela["status"] = "Pendente"
+                dados_parcela["data_pagamento"] = None
+                dados_parcela["conta_corrente_id"] = None
+            
+            db_conta = Conta(**dados_parcela, usuario_id=usuario_id)
+            db.add(db_conta)
+            
+            if i == 1:
+                primeira_conta = db_conta
+                
         db.commit()
-        db.refresh(db_conta)
-        return db_conta
+        db.refresh(primeira_conta)
+        return primeira_conta
 
     @staticmethod
     def atualizar_conta(db: Session, conta_id: int, conta_update: ContaUpdate, usuario_id: int):

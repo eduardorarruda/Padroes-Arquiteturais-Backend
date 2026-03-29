@@ -259,9 +259,15 @@ class ContaBase(BaseModel):
     status: str = Field(default="Pendente")
     categoria_id: Optional[int] = None
     parceiro_id: Optional[int] = None
+    grupo_parcelamento: Optional[str] = Field(None, description="UUID agrupador de parcelas")
+    numero_parcela: int = Field(default=1, description="Número da parcela atual")
+    total_parcelas: int = Field(default=1, description="Total de parcelas")
 
 class ContaCreate(ContaBase):
     conta_corrente_id: Optional[int] = Field(None, description="ID da Conta Corrente (obrigatório se status for PAGO ou RECEBIDO)")
+    quantidade_parcelas: int = Field(default=1, gt=0, description="Quantidade de parcelas a gerar")
+    intervalo_meses: int = Field(default=1, gt=0, description="Intervalo em meses entre cada parcela")
+    dividir_valor: bool = Field(default=False, description="Se True, divide o valor total pelas parcelas. Se False, repete o valor.")
     
     model_config = {
         "json_schema_extra": {
