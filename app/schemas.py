@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, EmailStr
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
 
 # ==========================================
@@ -310,7 +310,7 @@ class ContaCreate(ContaBase):
     quantidade_parcelas: int = Field(default=1, gt=0, description="Quantidade de parcelas a gerar")
     intervalo_meses: int = Field(default=1, gt=0, description="Intervalo em meses entre cada parcela")
     dividir_valor: bool = Field(default=False, description="Se True, divide o valor total pelas parcelas. Se False, repete o valor.")
-    
+
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -365,6 +365,101 @@ class NotificacaoResponse(BaseModel):
     tipo: str
     referencia_id: Optional[int] = None
     usuario_id: int
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+# ==========================================
+# SCHEMAS DE RELATÓRIOS
+# ==========================================
+
+class RelatorioContasResponse(BaseModel):
+    """Schema de resposta para os relatórios de contas a pagar, a receber, pagas e recebidas."""
+    id: int
+    descricao: str
+    valor: float
+    juros: float
+    multa: float
+    desconto: float
+    acrescimo: float
+    data_vencimento: date
+    data_pagamento: Optional[date] = None
+    tipo: str
+    status: str
+    categoria_id: Optional[int] = None
+    parceiro_id: Optional[int] = None
+    conta_corrente_id: Optional[int] = None
+    grupo_parcelamento: Optional[str] = None
+    numero_parcela: int
+    total_parcelas: int
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+
+class ExtratoItemResponse(BaseModel):
+    """Representa uma única linha no extrato financeiro."""
+    data: date = Field(..., description="Data da movimentação (data_pagamento da conta)")
+    descricao: str = Field(..., description="Descrição da movimentação")
+    tipo: str = Field(..., description="'ENTRADA' ou 'SAIDA'")
+    valor: float = Field(..., description="Valor da movimentação (sempre positivo)")
+    origem: str = Field(..., description="'CONTA' ou 'TRANSFERENCIA'")
+    referencia_id: Optional[int] = Field(None, description="ID da conta ou da transferência de origem")
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+
+class ExtratoFinanceiroResponse(BaseModel):
+    """Schema de resposta do extrato financeiro de uma conta corrente."""
+    conta_corrente_id: int
+    descricao_conta: str = Field(..., description="Nome/descrição da conta corrente")
+    saldo_atual: float = Field(..., description="Saldo atual da conta corrente no momento da consulta")
+    data_inicio: date
+    data_fim: date
+    total_entradas: float = Field(..., description="Soma de todas as entradas no período")
+    total_saidas: float = Field(..., description="Soma de todas as saídas no período")
+    movimentacoes: List[ExtratoItemResponse] = Field(
+        default_factory=list,
+        description="Lista cronológica de todas as movimentações do período",
+    )
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+
+class RelatorioCategoriasResponse(BaseModel):
+    """Schema de resposta do relatório agrupado por categoria."""
+    categoria_id: Optional[int] = Field(None, description="ID da categoria (None = sem categoria)")
+    descricao: str = Field(..., description="Descrição da categoria")
+    total_gasto: float = Field(..., description="Soma das contas do tipo PAGAR pagas no período")
+    total_recebido: float = Field(..., description="Soma das contas do tipo RECEBER recebidas no período")
+    contas: List[RelatorioContasResponse] = Field(
+        default_factory=list,
+        description="Lista de contas detalhadas (preenchida apenas quando listar_financeiro=true)",
+    )
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+
+class RelatorioCartaoResponse(BaseModel):
+    """Schema de resposta do relatório de fatura de cartão."""
+    cartao_id: int
+    nome_cartao: str
+    mes: int
+    ano: int
+    total_fatura: float = Field(..., description="Soma de todos os lançamentos do período")
+    quantidade_lancamentos: int = Field(..., description="Número de lançamentos na fatura")
+    lancamentos: List[LancamentoCartaoResponse] = Field(
+        default_factory=list,
+        description="Lista detalhada dos lançamentos que compõem a fatura",
+    )
 
     class Config:
         orm_mode = True

@@ -51,7 +51,7 @@ class CategoriaService:
 # SERVIÇOS DE PARCEIRO
 # ==========================================
 class ParceiroService:
-    
+
     @staticmethod
     def _buscar_dados_cnpj(cnpj: str) -> dict:
         """Consulta a BrasilAPI e retorna os dados mapeados, ou {} em caso de falha."""
@@ -296,12 +296,12 @@ class ContaService:
     @staticmethod
     def criar_conta(db: Session, conta: ContaCreate, usuario_id: int):
         conta_data = conta.dict() if hasattr(conta, 'dict') else conta.model_dump()
-        
+
         # Remove os campos virtuais do Pydantic para não darem erro no SQLAlchemy
         qtd_parcelas = conta_data.pop("quantidade_parcelas", 1)
         intervalo_meses = conta_data.pop("intervalo_meses", 1)
         dividir_valor = conta_data.pop("dividir_valor", False)
-        
+
         # Validação para a conta original que nasça paga (geralmente só a primeira)
         status_atual = str(conta_data.get("status", "")).upper()
         if status_atual in ["PAGO", "RECEBIDO"]:
@@ -309,7 +309,7 @@ class ContaService:
                 raise HTTPException(status_code=400, detail="É obrigatório informar a 'conta_corrente_id' quando a conta for criada com status PAGO ou RECEBIDO.")
             if not conta_data.get("data_pagamento"):
                 raise HTTPException(status_code=400, detail="É obrigatório informar a 'data_pagamento' quando a conta for criada com status PAGO ou RECEBIDO.")
-                
+
             # Validar conta corrente
             db_cc = db.query(ContaCorrente).filter(
                 ContaCorrente.id == conta_data["conta_corrente_id"],
@@ -329,16 +329,16 @@ class ContaService:
         import uuid
         import calendar
         from datetime import date
-        
+
         grupo_uuid = str(uuid.uuid4())
         valor_original = float(conta_data.get("valor", 0))
         valor_parcela = round(valor_original / qtd_parcelas, 2) if dividir_valor else valor_original
-        
+
         data_base_vencimento = conta_data.get("data_vencimento")
         descricao_base = conta_data.get("descricao", "")
-        
+
         primeira_conta = None
-        
+
         for i in range(1, qtd_parcelas + 1):
             dados_parcela = conta_data.copy()
             dados_parcela["grupo_parcelamento"] = grupo_uuid
@@ -346,7 +346,7 @@ class ContaService:
             dados_parcela["total_parcelas"] = qtd_parcelas
             dados_parcela["valor"] = valor_parcela
             dados_parcela["descricao"] = f"{descricao_base} ({i}/{qtd_parcelas})"
-            
+
             # Ajuste de vencimento (exceto para a primeira parcela)
             if i > 1:
                 meses_adicionais = (i - 1) * intervalo_meses
@@ -354,24 +354,24 @@ class ContaService:
                 ano_incremento = (novo_mes - 1) // 12
                 mes_final = ((novo_mes - 1) % 12) + 1
                 ano_final = data_base_vencimento.year + ano_incremento
-                
+
                 # Previne erro de dias que não existem no mês, ex: 31 Fev
                 ultimo_dia_mes = calendar.monthrange(ano_final, mes_final)[1]
                 dia_final = min(data_base_vencimento.day, ultimo_dia_mes)
-                
+
                 dados_parcela["data_vencimento"] = date(ano_final, mes_final, dia_final)
-                
+
                 # Limpar status de pagamento para parcelas futuras
                 dados_parcela["status"] = "Pendente"
                 dados_parcela["data_pagamento"] = None
                 dados_parcela["conta_corrente_id"] = None
-            
+
             db_conta = Conta(**dados_parcela, usuario_id=usuario_id)
             db.add(db_conta)
-            
+
             if i == 1:
                 primeira_conta = db_conta
-                
+
         db.commit()
         db.refresh(primeira_conta)
         return primeira_conta
@@ -383,12 +383,12 @@ class ContaService:
             return None
 
         update_data = conta_update.dict(exclude_unset=True) if hasattr(conta_update, 'dict') else conta_update.model_dump(exclude_unset=True)
-        
+
         # Desvinculação da conta corrente e data de pagamento se o status voltar para PENDENTE
         if "status" in update_data and update_data["status"].upper() == "PENDENTE":
             db_conta.conta_corrente_id = None
             db_conta.data_pagamento = None
-            
+
         for key, value in update_data.items():
             setattr(db_conta, key, value)
 
@@ -453,14 +453,14 @@ class CartaoCreditoService:
     def _calcular_limites(db: Session, cartao: CartaoCredito, usuario_id: int):
         from sqlalchemy import func
         lancamentos_agrupados = db.query(
-            LancamentoCartao.mes_fatura, 
-            LancamentoCartao.ano_fatura, 
+            LancamentoCartao.mes_fatura,
+            LancamentoCartao.ano_fatura,
             func.sum(LancamentoCartao.valor).label("total")
         ).filter(
             LancamentoCartao.cartao_id == cartao.id,
             LancamentoCartao.usuario_id == usuario_id
         ).group_by(
-            LancamentoCartao.mes_fatura, 
+            LancamentoCartao.mes_fatura,
             LancamentoCartao.ano_fatura
         ).all()
 
@@ -472,10 +472,10 @@ class CartaoCreditoService:
                 Conta.usuario_id == usuario_id,
                 Conta.status.in_(["Pago", "Recebido", "PAGO", "RECEBIDO"])
             ).first()
-            
+
             if not conta_paga:
                 limite_usado += float(total or 0.0)
-                
+
         cartao.limite_usado = limite_usado
         cartao.limite_livre = float(cartao.limite) - limite_usado
         return cartao
@@ -643,13 +643,13 @@ class LancamentoCartaoService:
         grupo_uuid = str(uuid.uuid4())
         valor_original = float(lancamento_data.get("valor", 0))
         valor_parcela = round(valor_original / qtd_parcelas, 2) if dividir_valor else valor_original
-        
+
         mes_fatura_base = lancamento_data.get("mes_fatura")
         ano_fatura_base = lancamento_data.get("ano_fatura")
         descricao_base = lancamento_data.get("descricao", "")
-        
+
         primeiro_lancamento = None
-        
+
         for i in range(1, qtd_parcelas + 1):
             dados_parcela = lancamento_data.copy()
             dados_parcela["grupo_parcelamento"] = grupo_uuid
@@ -657,23 +657,23 @@ class LancamentoCartaoService:
             dados_parcela["total_parcelas"] = qtd_parcelas
             dados_parcela["valor"] = valor_parcela
             dados_parcela["descricao"] = f"{descricao_base} ({i}/{qtd_parcelas})"
-            
+
             # Cálculo do mês/ano da fatura
             meses_avanco = i - 1
             mes_novo = mes_fatura_base + meses_avanco
             ano_adicional = (mes_novo - 1) // 12
             mes_final = ((mes_novo - 1) % 12) + 1
             ano_final = ano_fatura_base + ano_adicional
-            
+
             dados_parcela["mes_fatura"] = mes_final
             dados_parcela["ano_fatura"] = ano_final
-            
+
             db_lancamento = LancamentoCartao(**dados_parcela, cartao_id=cartao_id, usuario_id=usuario_id)
             db.add(db_lancamento)
-            
+
             if i == 1:
                 primeiro_lancamento = db_lancamento
-                
+
         db.commit()
         db.refresh(primeiro_lancamento)
         return primeiro_lancamento
@@ -849,3 +849,284 @@ class NotificacaoService:
             db.refresh(notif)
 
         return notificacoes_criadas
+
+
+# ==========================================
+# SERVIÇOS DE RELATÓRIOS
+# ==========================================
+class RelatorioService:
+
+    # ------------------------------------------------------------------
+    # RELATÓRIO 1 — Contas a Pagar (Pendente / Atrasado no período)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def contas_a_pagar(db: Session, usuario_id: int, data_inicio: date, data_fim: date):
+        """Contas do tipo PAGAR com status Pendente ou Atrasado cujo vencimento cai no período."""
+        return (
+            db.query(Conta)
+            .filter(
+                Conta.usuario_id == usuario_id,
+                Conta.tipo == "PAGAR",
+                Conta.status.in_(["Pendente", "Atrasado"]),
+                Conta.data_vencimento >= data_inicio,
+                Conta.data_vencimento <= data_fim,
+            )
+            .order_by(Conta.data_vencimento)
+            .all()
+        )
+
+    # ------------------------------------------------------------------
+    # RELATÓRIO 2 — Contas a Receber (Pendente / Atrasado no período)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def contas_a_receber(db: Session, usuario_id: int, data_inicio: date, data_fim: date):
+        """Contas do tipo RECEBER com status Pendente ou Atrasado cujo vencimento cai no período."""
+        return (
+            db.query(Conta)
+            .filter(
+                Conta.usuario_id == usuario_id,
+                Conta.tipo == "RECEBER",
+                Conta.status.in_(["Pendente", "Atrasado"]),
+                Conta.data_vencimento >= data_inicio,
+                Conta.data_vencimento <= data_fim,
+            )
+            .order_by(Conta.data_vencimento)
+            .all()
+        )
+
+    # ------------------------------------------------------------------
+    # RELATÓRIO 3 — Contas Pagas (data_pagamento no período)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def contas_pagas(db: Session, usuario_id: int, data_inicio: date, data_fim: date):
+        """Contas do tipo PAGAR com status Pago cuja data_pagamento está no período."""
+        return (
+            db.query(Conta)
+            .filter(
+                Conta.usuario_id == usuario_id,
+                Conta.tipo == "PAGAR",
+                Conta.status == "Pago",
+                Conta.data_pagamento >= data_inicio,
+                Conta.data_pagamento <= data_fim,
+            )
+            .order_by(Conta.data_pagamento)
+            .all()
+        )
+
+    # ------------------------------------------------------------------
+    # RELATÓRIO 4 — Contas Recebidas (data_pagamento no período)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def contas_recebidas(db: Session, usuario_id: int, data_inicio: date, data_fim: date):
+        """Contas do tipo RECEBER com status Recebido cuja data_pagamento está no período."""
+        return (
+            db.query(Conta)
+            .filter(
+                Conta.usuario_id == usuario_id,
+                Conta.tipo == "RECEBER",
+                Conta.status == "Recebido",
+                Conta.data_pagamento >= data_inicio,
+                Conta.data_pagamento <= data_fim,
+            )
+            .order_by(Conta.data_pagamento)
+            .all()
+        )
+
+    # ------------------------------------------------------------------
+    # RELATÓRIO 5 — Extrato Financeiro de uma Conta Corrente
+    # ------------------------------------------------------------------
+    @staticmethod
+    def extrato_financeiro(
+        db: Session,
+        usuario_id: int,
+        conta_corrente_id: int,
+        data_inicio: date,
+        data_fim: date,
+    ):
+        """
+        Retorna o extrato de uma conta corrente no período.
+
+        Movimentações consideradas:
+          - Entradas: contas do tipo RECEBER com status 'Recebido' vinculadas à conta.
+          - Saídas por conta: contas do tipo PAGAR com status 'Pago' vinculadas à conta.
+          - Saídas por transferência: detectadas como contas PAGAR com descrição
+            'Transferência para ...' gerada pelo sistema de transferências (padrão futuro).
+
+        Como o módulo de transferências atual não persiste registros separados na tabela
+        de contas, o extrato identifica transferências pela presença de contas com
+        descrição iniciando com "Transferência para" ou "Transferência de", permitindo
+        exibi-las com origem='TRANSFERENCIA' no extrato.
+        """
+        # Validar que a conta corrente existe e pertence ao usuário
+        db_cc = db.query(ContaCorrente).filter(
+            ContaCorrente.id == conta_corrente_id,
+            ContaCorrente.usuario_id == usuario_id,
+        ).first()
+        if not db_cc:
+            raise HTTPException(
+                status_code=404,
+                detail="Conta corrente não encontrada ou não pertence ao usuário",
+            )
+
+        # Buscar todas as contas baixadas vinculadas à conta corrente no período
+        contas_no_periodo = (
+            db.query(Conta)
+            .filter(
+                Conta.usuario_id == usuario_id,
+                Conta.conta_corrente_id == conta_corrente_id,
+                Conta.status.in_(["Pago", "Recebido"]),
+                Conta.data_pagamento >= data_inicio,
+                Conta.data_pagamento <= data_fim,
+            )
+            .order_by(Conta.data_pagamento)
+            .all()
+        )
+
+        movimentacoes = []
+        total_entradas = 0.0
+        total_saidas = 0.0
+
+        for conta in contas_no_periodo:
+            descricao_lower = (conta.descricao or "").lower()
+            is_transferencia = descricao_lower.startswith("transferência para") or \
+                               descricao_lower.startswith("transferencia para") or \
+                               descricao_lower.startswith("transferência de") or \
+                               descricao_lower.startswith("transferencia de")
+
+            origem = "TRANSFERENCIA" if is_transferencia else "CONTA"
+
+            if conta.tipo.value == "RECEBER":
+                tipo_mov = "ENTRADA"
+                total_entradas += float(conta.valor)
+            else:
+                tipo_mov = "SAIDA"
+                total_saidas += float(conta.valor)
+
+            movimentacoes.append({
+                "data": conta.data_pagamento,
+                "descricao": conta.descricao,
+                "tipo": tipo_mov,
+                "valor": float(conta.valor),
+                "origem": origem,
+                "referencia_id": conta.id,
+            })
+
+        return {
+            "conta_corrente_id": conta_corrente_id,
+            "descricao_conta": db_cc.descricao,
+            "saldo_atual": float(db_cc.saldo),
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "total_entradas": total_entradas,
+            "total_saidas": total_saidas,
+            "movimentacoes": movimentacoes,
+        }
+
+    # ------------------------------------------------------------------
+    # RELATÓRIO 6 — Agrupamento por Categoria
+    # ------------------------------------------------------------------
+    @staticmethod
+    def por_categoria(
+        db: Session,
+        usuario_id: int,
+        data_inicio: date,
+        data_fim: date,
+        listar_financeiro: bool = False,
+    ):
+        """
+        Agrupa as contas pagas/recebidas no período por categoria.
+        Se listar_financeiro=True, inclui os registros detalhados em cada grupo.
+        """
+        # Buscar todas as contas liquidadas no período
+        contas = (
+            db.query(Conta)
+            .filter(
+                Conta.usuario_id == usuario_id,
+                Conta.status.in_(["Pago", "Recebido"]),
+                Conta.data_pagamento >= data_inicio,
+                Conta.data_pagamento <= data_fim,
+            )
+            .order_by(Conta.data_pagamento)
+            .all()
+        )
+
+        # Agrupar em memória por categoria_id
+        grupos: dict = {}  # categoria_id (ou None) -> dict
+
+        for conta in contas:
+            cat_id = conta.categoria_id
+
+            if cat_id not in grupos:
+                # Resolver descrição da categoria
+                if cat_id is not None:
+                    categoria_obj = db.query(Categoria).filter(Categoria.id == cat_id).first()
+                    descricao_cat = categoria_obj.descricao if categoria_obj else "Categoria desconhecida"
+                else:
+                    descricao_cat = "Sem categoria"
+
+                grupos[cat_id] = {
+                    "categoria_id": cat_id,
+                    "descricao": descricao_cat,
+                    "total_gasto": 0.0,
+                    "total_recebido": 0.0,
+                    "contas": [],
+                }
+
+            valor = float(conta.valor)
+            if conta.tipo.value == "PAGAR":
+                grupos[cat_id]["total_gasto"] += valor
+            else:
+                grupos[cat_id]["total_recebido"] += valor
+
+            if listar_financeiro:
+                grupos[cat_id]["contas"].append(conta)
+
+        # Ordenar pelo nome da categoria para saída consistente
+        resultado = sorted(grupos.values(), key=lambda g: (g["descricao"] or ""))
+        return resultado
+
+    # ------------------------------------------------------------------
+    # RELATÓRIO 7 — Fatura do Cartão de Crédito
+    # ------------------------------------------------------------------
+    @staticmethod
+    def fatura_cartao(
+        db: Session,
+        usuario_id: int,
+        cartao_id: int,
+        mes: int,
+        ano: int,
+    ):
+        """Retorna o total e a lista de lançamentos de um cartão para o mês/ano informados."""
+        db_cartao = db.query(CartaoCredito).filter(
+            CartaoCredito.id == cartao_id,
+            CartaoCredito.usuario_id == usuario_id,
+        ).first()
+        if not db_cartao:
+            raise HTTPException(
+                status_code=404,
+                detail="Cartão não encontrado ou não pertence ao usuário",
+            )
+
+        lancamentos = (
+            db.query(LancamentoCartao)
+            .filter(
+                LancamentoCartao.cartao_id == cartao_id,
+                LancamentoCartao.usuario_id == usuario_id,
+                LancamentoCartao.mes_fatura == mes,
+                LancamentoCartao.ano_fatura == ano,
+            )
+            .order_by(LancamentoCartao.data_compra)
+            .all()
+        )
+
+        total_fatura = sum(float(l.valor) for l in lancamentos)
+
+        return {
+            "cartao_id": cartao_id,
+            "nome_cartao": db_cartao.nome,
+            "mes": mes,
+            "ano": ano,
+            "total_fatura": total_fatura,
+            "quantidade_lancamentos": len(lancamentos),
+            "lancamentos": lancamentos,
+        }

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
-from .routers import contas, auth, categorias, parceiros, contas_correntes, cartoes, notificacoes
+from .routers import contas, auth, categorias, parceiros, contas_correntes, cartoes, notificacoes, relatorios
 
 # Cria as tabelas no banco de dados (se não existirem)
 Base.metadata.create_all(bind=engine)
@@ -35,6 +35,13 @@ tags_metadata = [
         "name": "Notificações",
         "description": "Sistema de alertas para contas vencidas e fechamento de faturas de cartões.",
     },
+    {
+        "name": "Relatórios",
+        "description": (
+            "Relatórios financeiros: contas a pagar/receber, contas pagas/recebidas, "
+            "extrato por conta corrente, agrupamento por categoria e fatura de cartão."
+        ),
+    },
 ]
 
 app = FastAPI(
@@ -61,6 +68,7 @@ app.include_router(contas_correntes.router)
 app.include_router(cartoes.router)
 app.include_router(contas.router)
 app.include_router(notificacoes.router)
+app.include_router(relatorios.router)
 
 @app.get("/")
 def root():
